@@ -1,0 +1,28 @@
+# Core game port assets & executables (protected / heavy binaries)
+/ports
+*.exe
+*.EXE
+*.aarch64*
+
+# Distributions & built archive packages
+/dist/
+*.zip
+*.tar.gz
+*.7z
+
+# Local drop-in assets, save games & media
+/nfsu2_thai
+/saves
+/screenshots
+
+# Temporary files & logs
+*.log
+.backup*/
+_stage*/
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
