@@ -8,6 +8,12 @@ This document serves as the authoritative operational and development reference 
 > [!IMPORTANT] Operational Rule: Synchronous Execution Only (No Background Tasks)
 > **Never run commands as background tasks (`run_command` with low wait time or async).** Always execute commands synchronously to completion (`WaitMsBeforeAsync` at maximum e.g. 10000ms, or wait until finished). Do not delegate or background long-running processes that require follow-up, as context switching risks forgetting the active lifecycle or delaying subsequent workflow steps.
 
+> [!IMPORTANT] Operational Rule: Handheld Script UI Language & Frontend Reload Invariant
+> 1. **English Console Output**: All handheld terminal scripts (`.sh`) outputting to `/dev/tty1` or SSH must be 100% English to prevent framebuffer font corruption.
+> 2. **Universal Frontend Reload**: Every installer or uninstaller modifying `/roms/tools/` or `/roms/ports/` must execute `sudo systemctl restart emulationstation.service 2>/dev/null || true` followed by `playfe.service` fallback before exit.
+> 3. **Clean ZIP Distribution**: Tool archive packages (`dist/*.zip`) must bundle files within a single dedicated folder with only `README.txt` at the root.
+> 4. **Lifecycle Verification**: All release-bound changes must be validated against the 5-Phase E2E Lifecycle Verification Runbook.
+
 ---
 
 ## 1. Project & Architecture Overview
