@@ -41,7 +41,14 @@ New-Item -ItemType Directory -Path $stagePkg -Force | Out-Null
 # 2. Copy files to staging
 Write-Host "`n[1/3] Staging tools package layout..." -ForegroundColor Yellow
 Copy-Item -Path "$srcTools\*" -Destination $stagePkg -Recurse -Force
-Copy-Item -Path (Join-Path $srcTools "Install_NFSU2_Thai.sh") -Destination $stageDir -Force
+$toolsReadme = Join-Path $PSScriptRoot "tools\README.txt"
+if (Test-Path $toolsReadme) {
+    Copy-Item -Path $toolsReadme -Destination (Join-Path $stageDir "README.txt") -Force
+}
+$pkgReadme = Join-Path $stagePkg "README.txt"
+if (Test-Path $pkgReadme) {
+    Remove-Item $pkgReadme -Force
+}
 
 # 3. Compress to ZIP
 Write-Host "`n[2/3] Compressing package into ZIP archive..." -ForegroundColor Yellow

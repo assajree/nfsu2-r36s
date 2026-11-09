@@ -19,7 +19,8 @@ print_msg() {
 }
 
 wait_for_exit() {
-    print_msg "\n  >>> กดปุ่มใดก็ได้บนเครื่อง หรือ คีย์บอร์ด เพื่อปิดหน้านี้ <<<"
+    print_msg "
+  >>> Press any button or key to close <<<"
     sleep 0.6
     (
         if [ -t 0 ]; then
@@ -45,7 +46,7 @@ clear > /dev/tty1 2>/dev/null || true
 clear 2>/dev/null || true
 
 print_msg "=========================================================="
-print_msg "      เปลี่ยนภาษา NFSU2 เป็น: ENGLISH (ภาษาอังกฤษ)        "
+print_msg "           NFSU2 Language Switcher -> ENGLISH             "
 print_msg "=========================================================="
 print_msg ""
 
@@ -59,7 +60,7 @@ for cand in "/roms/ports/nfsu2" "/roms2/ports/nfsu2" "/roms/ports/NFSU2"; do
 done
 
 if [ -z "$NFSU2_DIR" ]; then
-    print_msg "[!] ไม่พบโฟลเดอร์เกม NFSU2 ที่ /roms/ports/nfsu2/"
+    print_msg "[!] ERROR: NFSU2 game folder not found at /roms/ports/nfsu2/"
     wait_for_exit
     exit 1
 fi
@@ -84,11 +85,11 @@ else
 fi
 
 sync
-print_msg "  [✓] ทำการตั้งค่าภาษาอังกฤษเรียบร้อยแล้ว!"
-print_msg "  -> NFSU2_LANG=English ใน $CFG_FILE"
+print_msg "  [OK] In-game language set to English successfully!"
+print_msg "  -> NFSU2_LANG=English in $CFG_FILE"
 print_msg ""
 print_msg "=========================================================="
-print_msg "     เมื่อเข้าเกมครั้งต่อไป ตัวเกมจะแสดงผลเป็นภาษาอังกฤษ   "
+print_msg "    The game will now display in English on next launch   "
 print_msg "=========================================================="
 
 wait_for_exit

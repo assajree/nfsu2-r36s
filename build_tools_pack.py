@@ -62,10 +62,15 @@ def build_tools_package(output_zip: Path = None):
     stage_pkg = stage_dir / "nfsu2_thai"
     shutil.copytree(src_tools, stage_pkg)
 
-    # Root installer: _stage_tools/Install_NFSU2_Thai.sh
-    root_installer = src_tools / "Install_NFSU2_Thai.sh"
-    if root_installer.exists():
-        shutil.copy2(root_installer, stage_dir / "Install_NFSU2_Thai.sh")
+    # Clean zip structure: README.txt at root of zip only
+    tools_readme = SCRIPT_DIR / "tools" / "README.txt"
+    if tools_readme.exists():
+        shutil.copy2(tools_readme, stage_dir / "README.txt")
+
+    # Ensure no README.txt inside nfsu2_thai/ folder
+    pkg_readme = stage_pkg / "README.txt"
+    if pkg_readme.exists():
+        pkg_readme.unlink()
 
     print(f"\n[2/3] Compressing package into {output_zip.name}...")
     if output_zip.exists():

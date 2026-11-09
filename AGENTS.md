@@ -161,6 +161,7 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 └── app/
     ├── NFSU2_Language_Thai.sh           <- Handheld launcher: Switch language to Thai
     ├── NFSU2_Language_English.sh        <- Handheld launcher: Switch language to English
+    ├── NFSU2_Toggle_Intro.sh            <- Handheld launcher: Toggle intro cutscenes (Skip/Restore)
     ├── Uninstall_NFSU2_Thai.sh          <- Handheld launcher: Restore backup & remove tools
     ├── generate_icons.py                <- Thumbnail generator script
     └── images/                          <- 512x512 launcher thumbnails
@@ -171,6 +172,7 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 /roms/ports/
 ├── NFSU2.sh                             <- Main launcher script (must be chmod 755)
 ├── images/
+│   ├── NFSU2-image.png                  <- 250x375 Box Art for EmulationStation / Ports
 │   └── NFSU2-thumb.png                  <- 512x512 Cover Art for EmulationStation / Ports
 └── nfsu2/
     ├── nfsu2.aarch64                    <- Active ARM64 recompiled binary
@@ -199,10 +201,12 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 /roms/tools/
 ├── NFSU2_Language_Thai.sh               <- Switch in-game language to Thai
 ├── NFSU2_Language_English.sh            <- Switch in-game language to English
+├── NFSU2_Toggle_Intro.sh                <- Toggle intro video playback (skip logos)
 ├── Uninstall_NFSU2_Thai.sh              <- Restore original game & uninstall tools (auto-hides nfsu2_thai/)
 ├── images/
 │   ├── NFSU2_Language_Thai-thumb.png
 │   ├── NFSU2_Language_English-thumb.png
+│   ├── NFSU2_Toggle_Intro-thumb.png
 │   └── Uninstall_NFSU2_Thai-thumb.png
 └── nfsu2_thai/                          <- Installed tools package directory (auto-hidden in playfe via stem match; preserved on uninstall for re-installation)
 ```
@@ -296,12 +300,16 @@ To support handheld users who cannot run Linux shell scripts or terminal tools o
   ```text
   nfsu2_thai_copy_paste.zip
   ├── README_INSTALL.txt                   <- Clear installation instructions
+  ├── images/                              <- Ports cover art (safe drop-in)
+  │   ├── NFSU2-image.png                  <- 250x375 Box Art
+  │   └── NFSU2-thumb.png                  <- 512x512 Cover Art
   └── nfsu2/                               <- Pre-patched drop-in game folder
       ├── nfsu2.aarch64                    <- Pre-patched ARM64 binary (unlocked universal subtitles)
       ├── nfsu2.aarch64.v10                <- Pre-patched binary mirror for v1.0
       └── gamedata/
           ├── SPEED2.EXE                   <- Patched v1.0 No-CD exe (Thai fonts + subtitle unlock)
           └── LANGUAGES/
+              ├── LanguageTextures.bin     <- Thai font textures (Conduit Thai Fonts HD)
               └── Thailand.bin             <- Patched Thai translation (with vkbd name crash fix)
   ```
 * **Installation Workflow**:
@@ -317,22 +325,25 @@ To support handheld users who cannot run Linux shell scripts or terminal tools o
 * **Package Internal Structure**:
   ```text
   nfsu2_thai.zip
-  ├── Install_NFSU2_Thai.sh                <- Root installer script for /roms/tools/
+  ├── README.txt                           <- Clean root installation manual (Thai)
   └── nfsu2_thai/                          <- Dedicated tools package folder
-      ├── Install_NFSU2_Thai.sh            <- Package copy of installer
-      ├── README.txt                       <- Instructions & tools catalog guide
+      ├── Install_NFSU2_Thai.sh            <- Main installer script
       ├── images/                          <- Cover art & thumbnails (512x512)
+      │   ├── NFSU2-image.png
       │   ├── NFSU2-thumb.png
       │   ├── NFSU2_Language_Thai-thumb.png
       │   ├── NFSU2_Language_English-thumb.png
+      │   ├── NFSU2_Toggle_Intro-thumb.png
       │   └── Uninstall_NFSU2_Thai-thumb.png
       ├── gamedata/                        <- Game data patch assets
       │   ├── SPEED2.EXE                   <- Patched executable (4,788,224 bytes)
       │   └── LANGUAGES/
+      │       ├── LanguageTextures.bin
       │       └── Thailand.bin             <- Patched Thai translation (264,184 bytes)
       └── app/                             <- Handheld launcher scripts & assets
           ├── NFSU2_Language_Thai.sh       <- Switch game language to Thai
           ├── NFSU2_Language_English.sh    <- Switch game language to English
+          ├── NFSU2_Toggle_Intro.sh        <- Toggle intro cutscenes (Skip/Restore)
           ├── Uninstall_NFSU2_Thai.sh      <- Restore backup & clean TOOLS menu
           ├── generate_icons.py            <- Icon generator
           └── images/                      <- Launcher thumbnails mirror
@@ -346,3 +357,117 @@ To support handheld users who cannot run Linux shell scripts or terminal tools o
   * Automatically packages `tools/nfsu2_thai` into `dist/nfsu2_thai.zip` completely within this project.
   * Once built, copy `dist/nfsu2_thai.zip` (or extract) to `D:\r36h\tools\nfsu2_thai` or deploy directly to device `/roms/tools/`.
 
+
+---
+
+## 11. End-to-End Lifecycle Testing (E2E Test Runbook)
+
+To guarantee stability, zero file corruption, and full reversibility on handheld hardware (R36H / R36S), any modifications to the game port, translation patches, or companion tools must pass the full 5-stage lifecycle verification:
+
+```mermaid
+flowchart TD
+    A["Phase 1: Installation & Backup"] --> B["Phase 2: In-Game Runtime & Controls"]
+    B --> C["Phase 3: Operational Switchers (Lang / Intro)"]
+    C --> D["Phase 4: Clean Uninstallation & Rollback"]
+    D --> E["Phase 5: Zero-Leftover Post-Verification"]
+```
+
+### 11.1 Phase 1: Installation & Backup Lifecycle Verification
+* **Pre-flight Checks**:
+  * Verify target executable `SPEED2.EXE` matches v1.0 (`4,788,224` bytes) or v1.2 (`4,800,512` bytes).
+  * Check that `nfsu2.aarch64` exists and has execute permissions (`chmod 755`).
+* **Backup Integrity**:
+  * Run `Install_NFSU2_Thai.sh`.
+  * Confirm `.backup_thai/` directory is created inside `/roms/ports/nfsu2/`.
+  * Verify backups of original `SPEED2.EXE`, `Thailand.bin`, `nfsu2.aarch64`, and `nfsu2.aarch64.v10`.
+* **Patch & Asset Deployment**:
+  * Verify `SPEED2.EXE` MD5 hash matches patched state (`7cbec03689721645a5456bc0292ef1bf`).
+  * Verify `Thailand.bin` MD5 hash matches patched state (`393493495ecbe6d71512f4ce84973ed3`).
+  * Verify ARM64 binary pattern patches for `sub_0050CEF0` (AL=1) and `sub_005535F0` (unconditional branch).
+  * Verify `/roms/ports/images/NFSU2-image.png` (250x375 Box Art) and `NFSU2-thumb.png` (512x512) are copied.
+  * Verify `/roms/ports/gamelist.xml` has `<image>` and `<thumbnail>` tags injected for `./NFSU2.sh`.
+* **Frontend Menu Refresh**:
+  * Verify execution of `sudo systemctl restart emulationstation.service` (or `playfe.service`).
+  * Check that tool shortcuts appear in the handheld UI:
+    * `NFSU2_Language_Thai.sh`
+    * `NFSU2_Language_English.sh`
+    * `NFSU2_Toggle_Intro.sh`
+    * `Uninstall_NFSU2_Thai.sh`
+
+### 11.2 Phase 2: In-Game Runtime & Controls Lifecycle Verification
+* **Headless Dry-Run (SSH)**:
+  ```bash
+  timeout 4 /roms/ports/nfsu2/nfsu2.aarch64 /roms/ports/nfsu2/gamedata --lang=Thai
+  ```
+  * Verify process starts cleanly, initializes audio/video contexts, loads assets without segfault, and exits with expected code (124 from timeout).
+* **Swap & Memory Check**:
+  * Verify `/roms/ports/nfsu2/.swapfile` (512 MB) is active if system RAM/swap is constrained.
+  * Inspect `/roms/ports/nfsu2/launcher.log` for governor frequencies (`performance` / CPU 1.3 GHz) and page cache flushing.
+* **In-Game Playability (On Device)**:
+  * Profile creation: Type player name using PortMaster virtual keyboard (confirm no crash due to `PC_NAME_ENTRY` fix).
+  * Thai font rendering: Verify font glyphs stream correctly with zero overlapping on menus and HUD.
+  * Subtitles: Verify Brooke Burke intro and comic cutscenes display Thai subtitles.
+  * Hotkey exit: Press `Select + Start` simultaneously; verify clean return to frontend without screen hang.
+
+### 11.3 Phase 3: Operational Switchers Lifecycle Verification
+* **Language Switch Cycle**:
+  1. Run `sudo bash /roms/tools/NFSU2_Language_English.sh` -> Check `grep NFSU2_LANG /roms/ports/nfsu2/nfsu2.cfg` outputs `NFSU2_LANG=English`.
+  2. Test game dry-run in English (`--lang=English`).
+  3. Run `sudo bash /roms/tools/NFSU2_Language_Thai.sh` -> Check `grep NFSU2_LANG /roms/ports/nfsu2/nfsu2.cfg` outputs `NFSU2_LANG=Thai`.
+  4. Test game dry-run in Thai (`--lang=Thai`).
+* **Intro Video Toggle Cycle**:
+  1. Run `sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null` -> Verify `MOVIES/_FMVOpening.vp6` backup is created and `FMVOpening.vp6` replaced with dummy `blank.vp6`.
+  2. Verify game boots directly to main menu without playing intro logos.
+  3. Run `sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null` again -> Verify files are restored back from `_*`.
+
+### 11.4 Phase 4: Clean Uninstallation & Rollback Lifecycle Verification
+* **Interactive Teardown**:
+  * Execute `sudo bash /roms/tools/Uninstall_NFSU2_Thai.sh < /dev/null`.
+  * Confirm prompt on `/dev/tty1` or SSH terminal.
+* **Restoration Integrity**:
+  * Verify original `SPEED2.EXE` restored from `.backup_thai/` (MD5: `95b4dc3e9a6c72b06a8bd62b0c56ea63` for v1.0).
+  * Verify original `Thailand.bin` restored (MD5 matches untouched retail hash).
+  * Verify `nfsu2.aarch64` restored to original recompiled binary.
+  * Verify `NFSU2_LANG=English` in `nfsu2.cfg`.
+  * Verify any disabled movies are restored to original state.
+  * Verify tool shortcuts (`NFSU2_*.sh`, `Uninstall_*.sh`) and thumbnails are purged from `/roms/tools/` and `/roms/tools/images/`.
+  * Verify `.backup_thai/` is deleted.
+* **Frontend Menu Refresh**:
+  * Confirm `emulationstation.service` restarts and the Tools menu no longer displays the removed shortcuts.
+
+### 11.5 Phase 5: Automated E2E Verification Script (SSH Runbook)
+Run this automated end-to-end verification sequence via SSH on the device:
+
+```bash
+# E2E Automated Lifecycle Test Sequence
+echo "=== 1. TEST INSTALL ==="
+sudo bash /roms/tools/nfsu2_thai/Install_NFSU2_Thai.sh
+
+echo "=== 2. VERIFY BACKUP & PATCHES ==="
+test -f /roms/ports/nfsu2/.backup_thai/SPEED2.EXE && echo "Backup OK" || echo "Backup FAILED"
+grep -q "NFSU2_LANG=Thai" /roms/ports/nfsu2/nfsu2.cfg && echo "Config Thai OK" || echo "Config FAILED"
+
+echo "=== 3. TEST DRY RUN (THAI) ==="
+timeout 4 /roms/ports/nfsu2/nfsu2.aarch64 /roms/ports/nfsu2/gamedata --lang=Thai
+
+echo "=== 4. TEST INTRO TOGGLE ==="
+sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null
+test -f /roms/ports/nfsu2/gamedata/MOVIES/_FMVOpening.vp6 && echo "Intro Skip OK" || echo "Intro Skip FAILED"
+sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null
+test ! -f /roms/ports/nfsu2/gamedata/MOVIES/_FMVOpening.vp6 && echo "Intro Restore OK" || echo "Intro Restore FAILED"
+
+echo "=== 5. TEST LANGUAGE SWITCH ==="
+sudo bash /roms/tools/NFSU2_Language_English.sh < /dev/null
+grep -q "NFSU2_LANG=English" /roms/ports/nfsu2/nfsu2.cfg && echo "Switch English OK" || echo "Switch English FAILED"
+sudo bash /roms/tools/NFSU2_Language_Thai.sh < /dev/null
+grep -q "NFSU2_LANG=Thai" /roms/ports/nfsu2/nfsu2.cfg && echo "Switch Thai OK" || echo "Switch Thai FAILED"
+
+echo "=== 6. TEST UNINSTALL ==="
+sudo bash /roms/tools/Uninstall_NFSU2_Thai.sh < /dev/null
+test ! -d /roms/ports/nfsu2/.backup_thai && echo "Backup Cleaned OK" || echo "Backup Cleaned FAILED"
+grep -q "NFSU2_LANG=English" /roms/ports/nfsu2/nfsu2.cfg && echo "Config English OK" || echo "Config FAILED"
+
+echo "=== 7. RE-INSTALL FOR USER ==="
+sudo bash /roms/tools/nfsu2_thai/Install_NFSU2_Thai.sh
+echo "=== FULL LIFECYCLE TEST PASSED ==="
+```

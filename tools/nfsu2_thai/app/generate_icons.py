@@ -16,7 +16,14 @@ def get_resample_filter():
     return Image.ANTIALIAS
 
 def draw_centered_text(draw, cx, cy, text, fill, font):
-    tw, th = draw.textsize(text, font=font)
+    if hasattr(draw, "textbbox"):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+    elif hasattr(draw, "textsize"):
+        tw, th = draw.textsize(text, font=font)
+    else:
+        tw, th = 8 * len(text), 16
     draw.text((cx - tw // 2, cy - th // 2), text, fill=fill, font=font)
 
 def draw_thick_arc(draw, cx, cy, r, start_deg, end_deg, fill, width=1):
@@ -81,15 +88,21 @@ def load_fonts(scale=2):
     font_paths = [
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+        "C:\\Windows\\Fonts\\arialbd.ttf",
+        "C:\\Windows\\Fonts\\tahomabd.ttf",
+        "C:\\Windows\\Fonts\\segoeuib.ttf"
     ]
     font_small = None
     font_bold = None
     for fp in font_paths:
         if os.path.exists(fp):
-            font_small = ImageFont.truetype(fp, 16 * scale)
-            font_bold = ImageFont.truetype(fp, 26 * scale)
-            break
+            try:
+                font_small = ImageFont.truetype(fp, 16 * scale)
+                font_bold = ImageFont.truetype(fp, 26 * scale)
+                break
+            except Exception:
+                pass
     if font_small is None:
         font_small = ImageFont.load_default()
         font_bold = ImageFont.load_default()
@@ -97,13 +110,20 @@ def load_fonts(scale=2):
     thai_font_paths = [
         "/usr/share/fonts/truetype/tlwg/Waree-Bold.ttf",
         "/usr/share/fonts/truetype/tlwg/Garuda-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "C:\\Windows\\Fonts\\leelawadb.ttf",
+        "C:\\Windows\\Fonts\\tahomabd.ttf",
+        "C:\\Windows\\Fonts\\tahoma.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf"
     ]
     thai_font = None
     for tfp in thai_font_paths:
         if os.path.exists(tfp):
-            thai_font = ImageFont.truetype(tfp, 19 * scale)
-            break
+            try:
+                thai_font = ImageFont.truetype(tfp, 19 * scale)
+                break
+            except Exception:
+                pass
     if thai_font is None:
         thai_font = font_small
 
@@ -300,6 +320,46 @@ def generate_uninstall_icon(out_path):
     final.convert("RGB").save(out_path, "PNG")
     print("Generated: {}".format(out_path))
 
+def generate_toggle_intro_icon(out_path):
+    scale = 2
+    canvas = create_base_canvas(scale)
+    draw = ImageDraw.Draw(canvas)
+    f_small, f_bold, f_thai = load_fonts(scale)
+    gold_col = (255, 204, 0)
+    draw_header(draw, scale, gold_col, f_small, f_bold)
+    cx, cy, ir = draw_gauge_circle(draw, scale, gold_col)
+
+    # Center Graphic: Fast-Forward Double Triangles (>> Instant Boot)
+    tri_h = 36 * scale
+    tri_w = 32 * scale
+    gap = 8 * scale
+
+    # Left triangle
+    x1 = cx - tri_w - gap // 2
+    draw.polygon([
+        (x1, cy - tri_h),
+        (x1 + tri_w, cy),
+        (x1, cy + tri_h)
+    ], fill=(255, 255, 255))
+
+    # Right triangle
+    x2 = cx + gap // 2
+    draw.polygon([
+        (x2, cy - tri_h),
+        (x2 + tri_w, cy),
+        (x2, cy + tri_h)
+    ], fill=gold_col)
+
+    # Speed boost line
+    draw.line([(cx - 50 * scale, cy + 46 * scale), (cx + 50 * scale, cy + 46 * scale)], fill=gold_col, width=3 * scale)
+
+    draw_footer_card(draw, scale, "FAST BOOT / SKIP INTRO", "เปิด/ปิด วิดีโอฉากเปิดเกม", f_bold, f_thai, gold_col)
+    make_border_frame(draw, scale, gold_col)
+
+    final = canvas.resize((512, 512), get_resample_filter())
+    final.convert("RGB").save(out_path, "PNG")
+    print("Generated: {}".format(out_path))
+
 if __name__ == "__main__":
     base_dir = os.path.dirname(os.path.abspath(__file__))
     if os.path.basename(base_dir) == "app":
@@ -313,6 +373,7 @@ if __name__ == "__main__":
     generate_thai_lang_icon(os.path.join(out_dir, "NFSU2_Language_Thai-thumb.png"))
     generate_english_lang_icon(os.path.join(out_dir, "NFSU2_Language_English-thumb.png"))
     generate_uninstall_icon(os.path.join(out_dir, "Uninstall_NFSU2_Thai-thumb.png"))
+    generate_toggle_intro_icon(os.path.join(out_dir, "NFSU2_Toggle_Intro-thumb.png"))
 
     os.makedirs(tools_images_dir, exist_ok=True)
     for f in os.listdir(out_dir):

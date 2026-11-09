@@ -60,12 +60,16 @@ Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack (R36H / R36S)
 - gamedata/LANGUAGES/Thailand.bin:
   * ข้อความภาษาไทยทางการ 3,924 รายการ
   * แก้ปัญหาแครชเวลาตั้งชื่อโปรไฟล์ใหม่บนคีย์บอร์ดเสมือน (vkbd / Name Entry Fix)
+- gamedata/LANGUAGES/LanguageTextures.bin:
+  * เทกซ์เจอร์และฟอนต์ภาษาไทยคมชัดระดับ HD (Conduit Thai Fonts)
 
 วิธีติดตั้งง่ายๆ (Copy-Paste):
 ------------------------------------------------------------------------------
-1. นำโฟลเดอร์ "nfsu2" ไปวางทับในเครื่องเกมที่:
-   /roms/ports/nfsu2/
-   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลากโฟลเดอร์ nfsu2 ไปวางทับในโฟลเดอร์ ports)
+1. นำโฟลเดอร์ "nfsu2" และ "images" ไปวางทับในเครื่องเกมที่:
+   /roms/ports/
+   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลากโฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports)
+   * โฟลเดอร์ images ประกอบด้วย Box Art (NFSU2-image.png) และ Thumbnail (NFSU2-thumb.png)
+   * ไม่ต้องทับไฟล์ gamelist.xml เพื่อป้องกันรายชื่อเกมเดิมสูญหาย
 2. ตรวจสอบให้แน่ใจว่าในไฟล์ /roms/ports/nfsu2/nfsu2.cfg ตั้งค่าภาษาเป็น:
    NFSU2_LANG=Thai
 3. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที!
@@ -98,6 +102,7 @@ def build_package(output_zip: Path = None):
     arm64_src = find_source_file([
         SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64",
         SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64.v10",
+        SCRIPT_DIR / "publish" / "nfsu2_thai_copy_paste" / "nfsu2" / "nfsu2.aarch64",
         SCRIPT_DIR / "nfsu2.aarch64",
     ])
     exe_src = find_source_file([
@@ -109,6 +114,11 @@ def build_package(output_zip: Path = None):
         SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "LANGUAGES" / "Thailand.bin",
         SCRIPT_DIR / "nfsu2_thai" / "LANGUAGES" / "Thailand.bin",
         SCRIPT_DIR / "ports" / "nfsu2" / "gamedata" / "LANGUAGES" / "Thailand.bin",
+    ])
+    lang_tex_src = find_source_file([
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "LANGUAGES" / "LanguageTextures.bin",
+        SCRIPT_DIR / "ports" / "nfsu2" / "gamedata" / "LANGUAGES" / "LanguageTextures.bin",
+        SCRIPT_DIR / "game" / "v1" / "LANGUAGES" / "LanguageTextures.bin",
     ])
 
     missing = []
@@ -144,6 +154,26 @@ def build_package(output_zip: Path = None):
     # Thailand.bin
     target_thai_bin = stage_lang / "Thailand.bin"
     shutil.copy2(thai_bin_src, target_thai_bin)
+
+    # LanguageTextures.bin
+    if lang_tex_src:
+        shutil.copy2(lang_tex_src, stage_lang / "LanguageTextures.bin")
+
+    # Ports Images (Box Art & Thumbnail - Safe Copy-Paste)
+    stage_images = stage_dir / "images"
+    stage_images.mkdir(parents=True, exist_ok=True)
+    boxart_src = find_source_file([
+        SCRIPT_DIR / "ports" / "images" / "NFSU2-image.png",
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "images" / "NFSU2-image.png",
+    ])
+    thumb_src = find_source_file([
+        SCRIPT_DIR / "ports" / "images" / "NFSU2-thumb.png",
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "images" / "NFSU2-thumb.png",
+    ])
+    if boxart_src:
+        shutil.copy2(boxart_src, stage_images / "NFSU2-image.png")
+    if thumb_src:
+        shutil.copy2(thumb_src, stage_images / "NFSU2-thumb.png")
 
     # README_INSTALL.txt
     readme_path = stage_dir / "README_INSTALL.txt"
