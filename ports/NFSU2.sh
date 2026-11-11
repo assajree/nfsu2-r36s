@@ -176,12 +176,12 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_ROTATE=90             # panel mounted rotated (90 or 270; portrait panels default to 90)
 #   NFSU2_SHOW_FPS=1            # frame counter on from the start (Select + R3 toggles it in game)
 # ---------------------------------------------------------------------------
-NFSU2_GRAPHICS=balanced
-NFSU2_FPS=60
+NFSU2_GRAPHICS=performance
+NFSU2_FPS=30
 NFSU2_REGISTRY_EXTRA=""
 NFSU2_GPU_EXTRAS=0
 NFSU2_DRAW_DIST=200
-NFSU2_LANG=Spanish
+NFSU2_LANG=Thai
 [ -f "$GAMEDIR/nfsu2.cfg" ] && . "$GAMEDIR/nfsu2.cfg"
 export NFSU2_DRAW_DIST NFSU2_LANG
 for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS; do

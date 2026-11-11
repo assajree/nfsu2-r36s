@@ -123,28 +123,20 @@ if [ -d "$BACKUP_DIR" ]; then
         print_msg "  -> Removed LANGUAGES/Thailand.bin [OK]"
     fi
 
-    # 4.6 Restore intro movies if toggled
-    if [ -d "$GAMEDATA/MOVIES" ]; then
-        for backup_vp6 in "$GAMEDATA/MOVIES"/_*.vp6; do
-            if [ -f "$backup_vp6" ]; then
-                orig_name="${backup_vp6##*/_}"
-                cp -f "$backup_vp6" "$GAMEDATA/MOVIES/$orig_name"
-                rm -f "$backup_vp6"
-                print_msg "  -> Restored movie $orig_name [OK]"
-            fi
-        done
-    fi
+    # 4.6 Preserve intro movie configuration (Leave current status intact)
+    print_msg "  -> Preserved intro movie configuration [OK]"
 
-    # 4.7 Remove backup directory after successful restore
-    rm -rf "$BACKUP_DIR"
-    print_msg "  -> Cleaned up .backup_thai directory [OK]"
+    # 4.7 Preserve backup directory after successful restore (Kept safely for user)
+    print_msg "  -> Preserved .backup_thai directory safely [OK]"
 else
-    print_msg "  [!] Backup folder .backup_thai not found (already cleaned)"
+    print_msg "  [!] Backup folder .backup_thai not found"
     print_msg "  -> Resetting in-game language to English..."
     if [ -f "$CFG_FILE" ]; then
         sed -i 's/^NFSU2_LANG=.*/NFSU2_LANG=English/' "$CFG_FILE" 2>/dev/null || true
     fi
 fi
+
+rm -f "$NFSU2_DIR/.nfsu2_thai" 2>/dev/null || true
 
 # 5. Preserve Save Games
 print_msg ""
@@ -186,6 +178,8 @@ if os.path.exists(gamelist_path):
             p = g.find("path")
             if p is not None and p.text:
                 norm_p = p.text.strip().lstrip("./")
+                if "NFSU2_Intro_Skip" in norm_p or "NFSU2_Intro_Restore" in norm_p:
+                    continue
                 if "NFSU2" in norm_p or "nfsu2" in norm_p:
                     root.remove(g)
                     removed = True
@@ -218,6 +212,9 @@ print_msg "=========================================================="
 print_msg "  * Game assets restored to original state before Thai patch"
 print_msg "  * In-game language reset to English"
 print_msg "  * Thai tools shortcuts removed from TOOLS menu"
+print_msg "  * NFSU2_Intro_Skip.sh & NFSU2_Intro_Restore.sh preserved in TOOLS"
+print_msg "  * Intro movie playback state preserved as-is"
+print_msg "  * Original backup preserved safely in .backup_thai/"
 print_msg "  * Package kept in /roms/tools/nfsu2_thai/ (can reinstall anytime)"
 print_msg "  * All player save game profiles are completely safe"
 print_msg "=========================================================="

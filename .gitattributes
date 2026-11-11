@@ -1,0 +1,12 @@
+# Enforce LF for shell scripts on all platforms
+*.sh text eol=lf
+*.cfg text eol=lf
+
+# Binary files
+*.bin binary
+*.exe binary
+*.EXE binary
+*.dat binary
+*.png binary
+*.zip binary
+fb0_mirror binary

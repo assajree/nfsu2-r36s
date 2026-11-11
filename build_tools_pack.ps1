@@ -50,6 +50,29 @@ if (Test-Path $pkgReadme) {
     Remove-Item $pkgReadme -Force
 }
 
+# playOS Anti-Clutter Invariant: Exclude non-essential .sh and companion files
+$appDir = Join-Path $stagePkg "app"
+if (Test-Path $appDir) {
+    Get-ChildItem -Path $appDir -Filter "*.sh" | Remove-Item -Force
+    Remove-Item (Join-Path $appDir "generate_icons.py") -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $appDir "fb0_mirror.c") -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $appDir "images") -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$pkgImgDir = Join-Path $stagePkg "images"
+if (Test-Path $pkgImgDir) {
+    $unusedThumbs = @(
+        "NFSU2_Intro_Restore-thumb.png",
+        "NFSU2_Intro_Skip-thumb.png",
+        "NFSU2_Language_English-thumb.png",
+        "NFSU2_Language_Thai-thumb.png",
+        "Uninstall_NFSU2_Thai-thumb.png"
+    )
+    foreach ($thumb in $unusedThumbs) {
+        Remove-Item (Join-Path $pkgImgDir $thumb) -ErrorAction SilentlyContinue
+    }
+}
+
 # 3. Compress to ZIP
 Write-Host "`n[2/3] Compressing package into ZIP archive..." -ForegroundColor Yellow
 if (Test-Path $OutputPath) {

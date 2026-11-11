@@ -72,6 +72,38 @@ def build_tools_package(output_zip: Path = None):
     if pkg_readme.exists():
         pkg_readme.unlink()
 
+    # playOS Anti-Clutter Invariant: Exclude non-essential .sh and companion files
+    # playfe scans subdirectories recursively; only keep the essential NFSU2_Thai.sh
+    app_dir = stage_pkg / "app"
+    if app_dir.exists():
+        # Exclude auxiliary CLI scripts
+        for sh_file in app_dir.glob("*.sh"):
+            sh_file.unlink()
+            print(f"  [Exclude] Removed {sh_file.name} from package")
+        # Exclude dev script, C source, and app/images
+        for dev_file in ["generate_icons.py", "fb0_mirror.c"]:
+            f = app_dir / dev_file
+            if f.exists():
+                f.unlink()
+        app_img = app_dir / "images"
+        if app_img.exists():
+            shutil.rmtree(app_img)
+
+    # Exclude unused thumbnails in nfsu2_thai/images/ (keep only NFSU2-image.png and NFSU2-thumb.png)
+    pkg_img_dir = stage_pkg / "images"
+    if pkg_img_dir.exists():
+        unused_thumbs = [
+            "NFSU2_Intro_Restore-thumb.png",
+            "NFSU2_Intro_Skip-thumb.png",
+            "NFSU2_Language_English-thumb.png",
+            "NFSU2_Language_Thai-thumb.png",
+            "Uninstall_NFSU2_Thai-thumb.png",
+        ]
+        for thumb in unused_thumbs:
+            thumb_path = pkg_img_dir / thumb
+            if thumb_path.exists():
+                thumb_path.unlink()
+
     print(f"\n[2/3] Compressing package into {output_zip.name}...")
     if output_zip.exists():
         output_zip.unlink()

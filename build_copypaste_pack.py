@@ -51,28 +51,32 @@ Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack (R36H / R36S)
 ==============================================================================
 
 ชุดแพตช์ภาษาไทย + ปลดล็อกคำบรรยายซับไตเติล (สำหรับ Copy-Paste วางทับได้ทันที):
-- nfsu2.aarch64 & nfsu2.aarch64.v10:
+- NFSU2.sh:
+  * ตัวเปิดเกมหลัก (Master Launcher) ตั้งค่าเริ่มต้นเป็นภาษาไทย (NFSU2_LANG=Thai)
+  * ปรับจูนกราฟิกและแคป 30 FPS สำหรับชิปเซ็ต RK3326
+- nfsu2/nfsu2.cfg:
+  * กำหนดค่าภาษาเริ่มต้นเป็น Thai พร้อมโปรไฟล์ performance สำหรับ R36H / R36S
+- nfsu2/nfsu2.aarch64 & nfsu2/nfsu2.aarch64.v10:
   * ปลดล็อกระบบซับไตเติลภาษาไทย (Thai Subtitles) ในคัตซีนการ์ตูน (Scene01-20)
   * ปลดล็อกซับไตเติลในฉากภาพยนตร์ (In-game FMV/Movies)
-- gamedata/SPEED2.EXE & speed2.exe:
+- nfsu2/gamedata/SPEED2.EXE & speed2.exe:
   * ปลดล็อกระบบแสดงผลภาษาไทย (Thai Localization)
   * ฟอนต์ภาษาไทยคมชัด ไม่กระพริบ
-- gamedata/LANGUAGES/Thailand.bin:
+- nfsu2/gamedata/LANGUAGES/Thailand.bin:
   * ข้อความภาษาไทยทางการ 3,924 รายการ
   * แก้ปัญหาแครชเวลาตั้งชื่อโปรไฟล์ใหม่บนคีย์บอร์ดเสมือน (vkbd / Name Entry Fix)
-- gamedata/LANGUAGES/LanguageTextures.bin:
+- nfsu2/gamedata/LANGUAGES/LanguageTextures.bin:
   * เทกซ์เจอร์และฟอนต์ภาษาไทยคมชัดระดับ HD (Conduit Thai Fonts)
+- images/:
+  * Box Art (NFSU2-image.png) และ Cover Art (NFSU2-thumb.png) คมชัด
 
 วิธีติดตั้งง่ายๆ (Copy-Paste):
 ------------------------------------------------------------------------------
-1. นำโฟลเดอร์ "nfsu2" และ "images" ไปวางทับในเครื่องเกมที่:
+1. นำไฟล์และโฟลเดอร์ทั้งหมด (NFSU2.sh, nfsu2, images) ไปวางทับในเครื่องเกมที่:
    /roms/ports/
-   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลากโฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports)
-   * โฟลเดอร์ images ประกอบด้วย Box Art (NFSU2-image.png) และ Thumbnail (NFSU2-thumb.png)
+   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลาก NFSU2.sh, โฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports ตอบ Replace All เพื่อวางทับไฟล์เดิม)
    * ไม่ต้องทับไฟล์ gamelist.xml เพื่อป้องกันรายชื่อเกมเดิมสูญหาย
-2. ตรวจสอบให้แน่ใจว่าในไฟล์ /roms/ports/nfsu2/nfsu2.cfg ตั้งค่าภาษาเป็น:
-   NFSU2_LANG=Thai
-3. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที!
+2. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที ภาษาไทยและซับไตเติลจะทำงานอัตโนมัติ!
 ==============================================================================
 """
 
@@ -99,11 +103,18 @@ def build_package(output_zip: Path = None):
     print("==================================================================")
 
     # 1. Locate Source Assets
-    arm64_src = find_source_file([
-        SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64",
+    launcher_src = find_source_file([
+        SCRIPT_DIR / "ports" / "NFSU2.sh",
+        SCRIPT_DIR / "NFSU2.sh",
+    ])
+    cfg_src = find_source_file([
+        SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.cfg",
+        SCRIPT_DIR / "nfsu2.cfg",
+    ])
+    arm64_v10_src = find_source_file([
         SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64.v10",
-        SCRIPT_DIR / "publish" / "nfsu2_thai_copy_paste" / "nfsu2" / "nfsu2.aarch64",
-        SCRIPT_DIR / "nfsu2.aarch64",
+        SCRIPT_DIR / "publish" / "nfsu2_thai_copy_paste" / "nfsu2" / "nfsu2.aarch64.v10",
+        SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64",
     ])
     exe_src = find_source_file([
         SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "SPEED2.EXE",
@@ -122,7 +133,9 @@ def build_package(output_zip: Path = None):
     ])
 
     missing = []
-    if not arm64_src: missing.append("nfsu2.aarch64")
+    if not launcher_src: missing.append("NFSU2.sh")
+    if not cfg_src: missing.append("nfsu2.cfg")
+    if not arm64_v10_src: missing.append("nfsu2.aarch64.v10")
     if not exe_src: missing.append("SPEED2.EXE")
     if not thai_bin_src: missing.append("Thailand.bin")
 
@@ -139,11 +152,21 @@ def build_package(output_zip: Path = None):
     stage_lang.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[1/4] Copying files to staging directory...")
-    # ARM64 binaries
+    # Master Launcher (NFSU2.sh) at root of ports
+    target_launcher = stage_dir / "NFSU2.sh"
+    launcher_bytes = launcher_src.read_bytes().replace(b"\r\n", b"\n")
+    target_launcher.write_bytes(launcher_bytes)
+
+    # Runtime Configuration (nfsu2/nfsu2.cfg)
+    target_cfg = stage_nfsu2 / "nfsu2.cfg"
+    cfg_bytes = cfg_src.read_bytes().replace(b"\r\n", b"\n")
+    target_cfg.write_bytes(cfg_bytes)
+
+    # ARM64 binaries (v10 for US retail v1.0 No-CD 4,788,224 bytes)
     target_arm64 = stage_nfsu2 / "nfsu2.aarch64"
     target_arm64_v10 = stage_nfsu2 / "nfsu2.aarch64.v10"
-    shutil.copy2(arm64_src, target_arm64)
-    shutil.copy2(arm64_src, target_arm64_v10)
+    shutil.copy2(arm64_v10_src, target_arm64)
+    shutil.copy2(arm64_v10_src, target_arm64_v10)
 
     # SPEED2.EXE
     target_exe = stage_gamedata / "SPEED2.EXE"
@@ -200,7 +223,15 @@ def build_package(output_zip: Path = None):
             for file in files:
                 full_path = Path(root) / file
                 rel_path = full_path.relative_to(stage_dir)
-                zipf.write(full_path, arcname=str(rel_path).replace("\\", "/"))
+                arcname = str(rel_path).replace("\\", "/")
+                zinfo = zipfile.ZipInfo.from_file(full_path, arcname=arcname)
+                # Ensure Linux execution permissions for .sh scripts and ELF binaries
+                if arcname.endswith(".sh") or "nfsu2.aarch64" in arcname:
+                    zinfo.external_attr = (0o755 << 16) | 0o100000
+                else:
+                    zinfo.external_attr = (0o644 << 16) | 0o100000
+                with open(full_path, "rb") as f_in:
+                    zipf.writestr(zinfo, f_in.read(), compress_type=zipfile.ZIP_DEFLATED)
 
     # 4. Cleanup and Report
     print(f"\n[4/4] Cleaning temporary staging directory...")

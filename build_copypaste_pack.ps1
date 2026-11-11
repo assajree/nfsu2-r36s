@@ -6,7 +6,7 @@
 #>
 
 param(
-    [string]$OutputPath = "$distDir\nfsu2_thai_copy_paste.zip"
+    [string]$OutputPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +15,10 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $distDir = Join-Path $scriptDir "dist"
 if (-not (Test-Path $distDir)) {
     New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+}
+
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    $OutputPath = Join-Path $distDir "nfsu2_thai_copy_paste.zip"
 }
 
 $stageDir = Join-Path $distDir "_stage_pack"
@@ -34,14 +38,22 @@ if (Test-Path $stageDir) {
 New-Item -ItemType Directory -Path $stageLang -Force | Out-Null
 
 # 2. Copy source files
-Write-Host "`n[1/3] Copying pre-patched binaries and assets..." -ForegroundColor Yellow
+Write-Host "`n[1/3] Copying pre-patched binaries, configs, and assets..." -ForegroundColor Yellow
 
+$launcherSrc = Join-Path $scriptDir "ports\NFSU2.sh"
+$cfgSrc = Join-Path $scriptDir "ports\nfsu2\nfsu2.cfg"
 $armSrc = Join-Path $scriptDir "ports\nfsu2\nfsu2.aarch64"
 $armV10Src = Join-Path $scriptDir "ports\nfsu2\nfsu2.aarch64.v10"
 $exeSrc = Join-Path $scriptDir "tools\nfsu2_thai\gamedata\SPEED2.EXE"
 $thaiBinSrc = Join-Path $scriptDir "tools\nfsu2_thai\gamedata\LANGUAGES\Thailand.bin"
 $langTexSrc = Join-Path $scriptDir "tools\nfsu2_thai\gamedata\LANGUAGES\LanguageTextures.bin"
 
+if (-not (Test-Path $launcherSrc)) {
+    throw "Source file not found: $launcherSrc"
+}
+if (-not (Test-Path $cfgSrc)) {
+    throw "Source file not found: $cfgSrc"
+}
 if (-not (Test-Path $armSrc)) {
     throw "Source file not found: $armSrc"
 }
@@ -55,7 +67,15 @@ if (-not (Test-Path $langTexSrc)) {
     $langTexSrc = Join-Path $scriptDir "ports\nfsu2\gamedata\LANGUAGES\LanguageTextures.bin"
 }
 
-Copy-Item $armSrc (Join-Path $stageNfsu2 "nfsu2.aarch64") -Force
+# Copy NFSU2.sh with Linux LF line endings
+$launcherContent = [System.IO.File]::ReadAllText($launcherSrc).Replace("`r`n", "`n")
+[System.IO.File]::WriteAllText((Join-Path $stageDir "NFSU2.sh"), $launcherContent, (New-Object System.Text.UTF8Encoding $false))
+
+# Copy nfsu2.cfg with Linux LF line endings
+$cfgContent = [System.IO.File]::ReadAllText($cfgSrc).Replace("`r`n", "`n")
+[System.IO.File]::WriteAllText((Join-Path $stageNfsu2 "nfsu2.cfg"), $cfgContent, (New-Object System.Text.UTF8Encoding $false))
+
+Copy-Item $armV10Src (Join-Path $stageNfsu2 "nfsu2.aarch64") -Force
 Copy-Item $armV10Src (Join-Path $stageNfsu2 "nfsu2.aarch64.v10") -Force
 Copy-Item $exeSrc (Join-Path $stageGamedata "SPEED2.EXE") -Force
 Copy-Item $exeSrc (Join-Path $stageGamedata "speed2.exe") -Force
@@ -79,28 +99,32 @@ Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack (R36H / R36S)
 ==============================================================================
 
 ชุดแพตช์ภาษาไทย + ปลดล็อกคำบรรยายซับไตเติล (สำหรับ Copy-Paste วางทับได้ทันที):
-- nfsu2.aarch64 & nfsu2.aarch64.v10:
+- NFSU2.sh:
+  * ตัวเปิดเกมหลัก (Master Launcher) ตั้งค่าเริ่มต้นเป็นภาษาไทย (NFSU2_LANG=Thai)
+  * ปรับจูนกราฟิกและแคป 30 FPS สำหรับชิปเซ็ต RK3326
+- nfsu2/nfsu2.cfg:
+  * กำหนดค่าภาษาเริ่มต้นเป็น Thai พร้อมโปรไฟล์ performance สำหรับ R36H / R36S
+- nfsu2/nfsu2.aarch64 & nfsu2/nfsu2.aarch64.v10:
   * ปลดล็อกระบบซับไตเติลภาษาไทย (Thai Subtitles) ในคัตซีนการ์ตูน (Scene01-20)
   * ปลดล็อกซับไตเติลในฉากภาพยนตร์ (In-game FMV/Movies)
-- gamedata/SPEED2.EXE & speed2.exe:
+- nfsu2/gamedata/SPEED2.EXE & speed2.exe:
   * ปลดล็อกระบบแสดงผลภาษาไทย (Thai Localization)
   * ฟอนต์ภาษาไทยคมชัด ไม่กระพริบ
-- gamedata/LANGUAGES/Thailand.bin:
+- nfsu2/gamedata/LANGUAGES/Thailand.bin:
   * ข้อความภาษาไทยทางการ 3,924 รายการ
   * แก้ปัญหาแครชเวลาตั้งชื่อโปรไฟล์ใหม่บนคีย์บอร์ดเสมือน (vkbd / Name Entry Fix)
-- gamedata/LANGUAGES/LanguageTextures.bin:
+- nfsu2/gamedata/LANGUAGES/LanguageTextures.bin:
   * เทกซ์เจอร์และฟอนต์ภาษาไทยคมชัดระดับ HD (Conduit Thai Fonts)
+- images/:
+  * Box Art (NFSU2-image.png) และ Cover Art (NFSU2-thumb.png) คมชัด
 
 วิธีติดตั้งง่ายๆ (Copy-Paste):
 ------------------------------------------------------------------------------
-1. นำโฟลเดอร์ "nfsu2" และ "images" ไปวางทับในเครื่องเกมที่:
+1. นำไฟล์และโฟลเดอร์ทั้งหมด (NFSU2.sh, nfsu2, images) ไปวางทับในเครื่องเกมที่:
    /roms/ports/
-   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลากโฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports)
-   * โฟลเดอร์ images ประกอบด้วย Box Art (NFSU2-image.png) และ Thumbnail (NFSU2-thumb.png)
+   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลาก NFSU2.sh, โฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports ตอบ Replace All เพื่อวางทับไฟล์เดิม)
    * ไม่ต้องทับไฟล์ gamelist.xml เพื่อป้องกันรายชื่อเกมเดิมสูญหาย
-2. ตรวจสอบให้แน่ใจว่าในไฟล์ /roms/ports/nfsu2/nfsu2.cfg ตั้งค่าภาษาเป็น:
-   NFSU2_LANG=Thai
-3. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที!
+2. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที ภาษาไทยและซับไตเติลจะทำงานอัตโนมัติ!
 ==============================================================================
 "@
 Set-Content -Path (Join-Path $stageDir "README_INSTALL.txt") -Value $readmeContent -Encoding UTF8
@@ -111,7 +135,7 @@ if (Test-Path $OutputPath) {
     Remove-Item $OutputPath -Force
 }
 
-Compress-Archive -Path (Join-Path $stageDir "nfsu2"), (Join-Path $stageDir "images"), (Join-Path $stageDir "README_INSTALL.txt") -DestinationPath $OutputPath -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $stageDir "NFSU2.sh"), (Join-Path $stageDir "nfsu2"), (Join-Path $stageDir "images"), (Join-Path $stageDir "README_INSTALL.txt") -DestinationPath $OutputPath -CompressionLevel Optimal
 
 # 5. Clean up staging
 Write-Host "`n[3/3] Cleaning up temporary files..." -ForegroundColor Yellow

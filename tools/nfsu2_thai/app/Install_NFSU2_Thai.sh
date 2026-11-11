@@ -32,7 +32,9 @@ print_msg "=========================================================="
 print_msg ""
 
 # Resolve Package Directory & App Directory
-if [ -d "$SCRIPT_DIR/app" ]; then
+if [ -d "$SCRIPT_DIR/../gamedata" ]; then
+    PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+elif [ -d "$SCRIPT_DIR/app" ]; then
     PKG_DIR="$SCRIPT_DIR"
 elif [ -d "$SCRIPT_DIR/nfsu2_thai/app" ]; then
     PKG_DIR="$SCRIPT_DIR/nfsu2_thai"
@@ -256,6 +258,7 @@ if [ "$TARGET_LANG" = "Thai" ]; then
 else
     print_msg "  -> Set NFSU2_LANG=English in $CFG_FILE [OK]"
 fi
+touch "$NFSU2_DIR/.nfsu2_thai" 2>/dev/null || true
 
 # 6. Install Tools Package & Handheld Launchers to /roms/tools/
 print_msg ""
@@ -267,13 +270,14 @@ fi
 chmod -R 755 "$TOOLS_DIR/nfsu2_thai" 2>/dev/null || true
 chown -R ark:ark "$TOOLS_DIR/nfsu2_thai" 2>/dev/null || true
 
-# Cleanup legacy /roms/tools/nfsu2/, Setup launcher, and old tools uninstaller
+# Cleanup legacy /roms/tools/nfsu2/, Setup launcher, old toggle, and old tools uninstaller
 rm -rf "$TOOLS_DIR/nfsu2" 2>/dev/null || true
 rm -f "$TOOLS_DIR/Setup_NFSU2_Thai.sh" "$TOOLS_DIR/images/Setup_NFSU2_Thai-thumb.png" 2>/dev/null || true
+rm -f "$TOOLS_DIR/NFSU2_Toggle_Intro.sh" "$TOOLS_DIR/images/NFSU2_Toggle_Intro-thumb.png" 2>/dev/null || true
 rm -f "$TOOLS_DIR/Uninstall_NFSU2_Tools.sh" "$TOOLS_DIR/nfsu2_thai/Uninstall_NFSU2_Tools.sh" 2>/dev/null || true
 
-# Install Launchers: Thai, English, Uninstall
-for launcher in "NFSU2_Language_Thai.sh" "NFSU2_Language_English.sh" "NFSU2_Toggle_Intro.sh" "Uninstall_NFSU2_Thai.sh"; do
+# Install Launchers: Thai, English, Intro Skip, Intro Restore, Uninstall
+for launcher in "NFSU2_Language_Thai.sh" "NFSU2_Language_English.sh" "NFSU2_Intro_Skip.sh" "NFSU2_Intro_Restore.sh" "Uninstall_NFSU2_Thai.sh"; do
     SRC_L=""
     if [ -f "$APP_DIR/$launcher" ]; then
         SRC_L="$APP_DIR/$launcher"
@@ -290,7 +294,7 @@ done
 
 # Install cover art thumbnails to /roms/tools/images/
 mkdir -p "$TOOLS_DIR/images"
-for thumb in "NFSU2_Language_Thai-thumb.png" "NFSU2_Language_English-thumb.png" "NFSU2_Toggle_Intro-thumb.png" "Uninstall_NFSU2_Thai-thumb.png"; do
+for thumb in "NFSU2_Language_Thai-thumb.png" "NFSU2_Language_English-thumb.png" "NFSU2_Intro_Skip-thumb.png" "NFSU2_Intro_Restore-thumb.png" "Uninstall_NFSU2_Thai-thumb.png"; do
     SRC_I=""
     if [ -f "$PKG_DIR/images/$thumb" ]; then
         SRC_I="$PKG_DIR/images/$thumb"
@@ -431,8 +435,9 @@ print_msg "  * Game Engine : Thai language & cutscene/movie subtitles enabled"
 print_msg "  * TOOLS Menu on R36H:"
 print_msg "      1. NFSU2_Language_Thai.sh    (Switch in-game language to Thai)"
 print_msg "      2. NFSU2_Language_English.sh (Switch in-game language to English)"
-print_msg "      3. NFSU2_Toggle_Intro.sh     (Toggle skip intro movies / fast boot)"
-print_msg "      4. Uninstall_NFSU2_Thai.sh   (Restore original game & clean menu)"
+print_msg "      3. NFSU2_Intro_Skip.sh       (Skip intro movies / fast boot 1s)"
+print_msg "      4. NFSU2_Intro_Restore.sh    (Restore original intro movies)"
+print_msg "      5. Uninstall_NFSU2_Thai.sh   (Restore original game & clean menu)"
 print_msg "  * Ready to play! Launch game from: PORTS -> NFSU2"
 print_msg "=========================================================="
 

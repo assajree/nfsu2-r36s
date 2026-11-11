@@ -320,16 +320,16 @@ def generate_uninstall_icon(out_path):
     final.convert("RGB").save(out_path, "PNG")
     print("Generated: {}".format(out_path))
 
-def generate_toggle_intro_icon(out_path):
+def generate_intro_skip_icon(out_path):
     scale = 2
     canvas = create_base_canvas(scale)
     draw = ImageDraw.Draw(canvas)
     f_small, f_bold, f_thai = load_fonts(scale)
-    gold_col = (255, 204, 0)
+    gold_col = (255, 190, 0)
     draw_header(draw, scale, gold_col, f_small, f_bold)
     cx, cy, ir = draw_gauge_circle(draw, scale, gold_col)
 
-    # Center Graphic: Fast-Forward Double Triangles (>> Instant Boot)
+    # Center Graphic: Fast-Forward Double Triangles (>> Instant Fast Boot)
     tri_h = 36 * scale
     tri_w = 32 * scale
     gap = 8 * scale
@@ -353,8 +353,37 @@ def generate_toggle_intro_icon(out_path):
     # Speed boost line
     draw.line([(cx - 50 * scale, cy + 46 * scale), (cx + 50 * scale, cy + 46 * scale)], fill=gold_col, width=3 * scale)
 
-    draw_footer_card(draw, scale, "FAST BOOT / SKIP INTRO", "เปิด/ปิด วิดีโอฉากเปิดเกม", f_bold, f_thai, gold_col)
+    draw_footer_card(draw, scale, "SKIP INTRO (FAST BOOT)", "ข้ามวิดีโอเปิดเกม (บูตไว 1 วิ)", f_bold, f_thai, gold_col)
     make_border_frame(draw, scale, gold_col)
+
+    final = canvas.resize((512, 512), get_resample_filter())
+    final.convert("RGB").save(out_path, "PNG")
+    print("Generated: {}".format(out_path))
+
+def generate_intro_restore_icon(out_path):
+    scale = 2
+    canvas = create_base_canvas(scale)
+    draw = ImageDraw.Draw(canvas)
+    f_small, f_bold, f_thai = load_fonts(scale)
+    cyan_col = (0, 210, 255)
+    draw_header(draw, scale, cyan_col, f_small, f_bold)
+    cx, cy, ir = draw_gauge_circle(draw, scale, cyan_col)
+
+    # Center Graphic: Movie Play Button inside Film Frame
+    circ_r = 45 * scale
+    draw.ellipse([cx - circ_r, cy - circ_r, cx + circ_r, cy + circ_r], fill=(10, 60, 90), outline=cyan_col, width=2 * scale)
+
+    # Play Triangle pointing right
+    tri_w = 30 * scale
+    tri_h = 34 * scale
+    draw.polygon([
+        (cx - tri_w // 2, cy - tri_h),
+        (cx + tri_w, cy),
+        (cx - tri_w // 2, cy + tri_h)
+    ], fill=(255, 255, 255))
+
+    draw_footer_card(draw, scale, "RESTORE INTRO MOVIES", "กู้คืนวิดีโอเปิดเกมต้นฉบับ", f_bold, f_thai, cyan_col)
+    make_border_frame(draw, scale, cyan_col)
 
     final = canvas.resize((512, 512), get_resample_filter())
     final.convert("RGB").save(out_path, "PNG")
@@ -373,7 +402,8 @@ if __name__ == "__main__":
     generate_thai_lang_icon(os.path.join(out_dir, "NFSU2_Language_Thai-thumb.png"))
     generate_english_lang_icon(os.path.join(out_dir, "NFSU2_Language_English-thumb.png"))
     generate_uninstall_icon(os.path.join(out_dir, "Uninstall_NFSU2_Thai-thumb.png"))
-    generate_toggle_intro_icon(os.path.join(out_dir, "NFSU2_Toggle_Intro-thumb.png"))
+    generate_intro_skip_icon(os.path.join(out_dir, "NFSU2_Intro_Skip-thumb.png"))
+    generate_intro_restore_icon(os.path.join(out_dir, "NFSU2_Intro_Restore-thumb.png"))
 
     os.makedirs(tools_images_dir, exist_ok=True)
     for f in os.listdir(out_dir):

@@ -10,9 +10,27 @@ This document serves as the authoritative operational and development reference 
 
 > [!IMPORTANT] Operational Rule: Handheld Script UI Language & Frontend Reload Invariant
 > 1. **English Console Output**: All handheld terminal scripts (`.sh`) outputting to `/dev/tty1` or SSH must be 100% English to prevent framebuffer font corruption.
-> 2. **Universal Frontend Reload**: Every installer or uninstaller modifying `/roms/tools/` or `/roms/ports/` must execute `sudo systemctl restart emulationstation.service 2>/dev/null || true` followed by `playfe.service` fallback before exit.
-> 3. **Clean ZIP Distribution**: Tool archive packages (`dist/*.zip`) must bundle files within a single dedicated folder with only `README.txt` at the root.
-> 4. **Lifecycle Verification**: All release-bound changes must be validated against the 5-Phase E2E Lifecycle Verification Runbook.
+> 2. **User Communication Language (Thai Language)**: Always communicate, summarize, explain steps, and provide user-facing updates in **Thai (ภาษาไทย)**. Technical terms, code symbols, paths, and command syntax may remain in English, but all explanations, summaries, and conversational responses must be clearly and naturally written in Thai.
+> 3. **Frontend Restart Ban (Parent-Child Deadlock Prevention)**: *Never* invoke `systemctl restart playfe.service` or `systemctl restart emulationstation.service` from inside any menu-launched script. Because the script executes as a child process inside the frontend's systemd cgroup, restarting the parent triggers a 90-second systemd deadlock (`State 'final-sigterm' timed out`), leaving the console frozen with a blinking cursor. The frontend (`playfe`) automatically pauses during script execution and regains the display within 0.1s on `exit 0`, with inotify (`libraryChanged`) detecting newly created or removed files automatically.
+> 4. **Clean ZIP Distribution**: Tool archive packages (`dist/*.zip`) must bundle files within a single dedicated folder with only `README.txt` at the root.
+> 5. **Lifecycle Verification**: All release-bound changes must be validated against the 5-Phase E2E Lifecycle Verification Runbook.
+
+> [!IMPORTANT] Operational Rule: Handheld TUI, Gamepad Input & Lifecycle UX Invariants
+> 1. **Dual-Frontend A/B Button Mapping**: All KMSDRM input bridges (`fb0_mirror`) must dynamically resolve OK/Cancel keys against the active frontend configuration:
+>    - **Priority 1 (`playfe`)**: `/home/ark/.config/playfe/playfe.cfg` -> `swap_ab=true` means A=OK, B=Back; `swap_ab=false` / unset means B=OK, A=Back.
+>    - **Priority 2 (ArkOS / EmulationStation fallback)**: `/home/ark/.emulationstation/es_settings.cfg` (`InvertButtons`) or `/var/cache/Switch_AB` -> active means B=OK, A=Back; normal means A=OK, B=Back.
+>    - In Linux `dialog`, OK triggers `\n` (Enter) and Back/Cancel triggers `\033\033` (Double ESC).
+> 2. **State Tracking Marker Flag**: Use clean filesystem flag files (`$PORT_DIR/.<tag>` e.g. `/roms/ports/nfsu2/.nfsu2_thai`) for 0ms status detection instead of in-place PE binary byte scanning during TUI main loop execution.
+> 3. **Self-Contained TUI & Clean Package Invariant (playOS Recursive .sh Scan Rule)**: In playOS, `playfe` recursively scans all subdirectories in `/roms/tools/` and exposes **every single `.sh` file** on the handheld's main menu, even when nested inside `app/` or helper folders. Therefore, packages and tool distributions must bundle **only the single essential `.sh` entrypoint** (e.g. `NFSU2_Thai.sh`). Never leave auxiliary or fallback CLI `.sh` scripts in subfolders. All installation, switching, and restoration logic must be implemented internally within the TUI script to prevent terminal text corruption and keep the TOOLS menu clean.
+> 4. **Handheld Single-Choice Standard (Avoid `--radiolist`)**: In ncurses TUI wizards, always use `dialog --menu` with `--default-item "$CURRENT_VAL"` instead of `dialog --radiolist`. On gamepads mapped via `gptokeyb`, button `A` sends `Enter`. In `--radiolist`, pressing `Enter` without `Space` submits the pre-checked default instead of the highlighted item.
+> 5. **Action Completion & Exit Lifecycle Standard**:
+>    - **Install & Uninstall**: One-shot actions. Display completion summary dialog (`Press A or Enter to exit.`) and immediately call `exit 0` to return control to the frontend.
+>    - **Single-Config Tools**: Only 1 setting. Saving settings completes user intent; display summary and call `exit 0`.
+>    - **Multi-Config Tools ($\ge 2$ settings, e.g. `NFSU2_Thai.sh`)**: Saving a setting displays `Press A or Enter to continue.` and returns to the Setup Menu so the user can configure additional options before exiting manually via `Exit` (or Button `B`).
+>    - **Cancel / Back (Button B)**: Always returns to the Setup Menu.
+> 6. **Dual-Target Ports Support & Side-by-Side Packaging**:
+>    - Primary target is `/roms/ports/` (enabled by default on playOS, dArkOS, and ArkOS).
+>    - The user-facing launcher must sit side-by-side with its internal subfolder and pre-packaged `images/` directory.
 
 ---
 
@@ -47,6 +65,21 @@ This document serves as the authoritative operational and development reference 
 | **Operating System** | PLAY OS / ArkOS (Debian 13 Trixie arm64, Kernel 4.4.189) |
 | **Frontend** | `playfe` / EmulationStation |
 | **Mount Points** | `/roms/ports/` (Primary ports directory on SD card) |
+| **Target Hostname (playOS)** | `playos.local` (Default/Active; mDNS supported) |
+| **Target Hostname (dArkOS)** | `svvv.local` (User setup when booting dArkOS) |
+| **SSH Port & Credentials** | Port `22` (`ark` / `ark`), escalate via `sudo` |
+
+* **SSH Access & Network Standards:**
+  * **Status:** Fully supported. Agents can interact with the device directly via SSH (e.g. Python `paramiko` or OpenSSH).
+  * **IP Address & Hostnames (mDNS):**
+    * **mDNS Resolution:** Fully supported out of the box via Avahi/Bonjour (`.local` domain). Agents can resolve IP or connect directly using hostname without asking the user.
+    * **playOS Hostname (Default/Active):** `playos.local` (resolves via `ping playos.local` or `Resolve-DnsName playos.local`).
+    * **dArkOS Hostname (User Setup):** `svvv.local` (when booting into dArkOS).
+    * **Fallback:** Only ask the user for manual IP if `.local` mDNS resolution fails or times out.
+  * **Port:** `22` (OpenSSH)
+  * **Default User:** `ark`
+  * **Default Password:** `ark`
+  * **Privilege Escalation:** Direct root SSH password login is disabled (`PermitRootLogin prohibit-password`). Must login as `ark` and escalate via `sudo -i` or `sudo <cmd>`.
 
 ---
 
@@ -157,18 +190,22 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 ### Local Tools Package Layout (`./tools/nfsu2_thai/`)
 ```text
 ./tools/nfsu2_thai/
-├── Install_NFSU2_Thai.sh                <- Auto-setup installer (backs up to .backup_thai/, installs Thai & subtitles)
-├── README.txt                           <- Thai installation & TOOLS menu guide
-├── images/                              <- Cover art & thumbnails (NFSU2, Thai, English, Uninstall)
+├── NFSU2_Thai.sh                        <- Master Smart TUI Manager (Install, Language, Fast Boot, Uninstall)
+├── images/                              <- Cover art & thumbnails (512x512)
 ├── gamedata/                            <- Retail game data patch assets
 │   ├── SPEED2.EXE                       <- Patched v1.0 No-CD executable (4,788,224 bytes)
 │   └── LANGUAGES/
+│       ├── LanguageTextures.bin         <- HD Thai font textures (1,286,144 bytes)
 │       └── Thailand.bin                 <- Patched Thai localization strings & fonts (264,184 bytes)
-└── app/
-    ├── NFSU2_Language_Thai.sh           <- Handheld launcher: Switch language to Thai
-    ├── NFSU2_Language_English.sh        <- Handheld launcher: Switch language to English
-    ├── NFSU2_Toggle_Intro.sh            <- Handheld launcher: Toggle intro cutscenes (Skip/Restore)
-    ├── Uninstall_NFSU2_Thai.sh          <- Handheld launcher: Restore backup & remove tools
+└── app/                                 <- Engine binaries and standalone CLI tool fallbacks
+    ├── fb0_mirror                       <- KMSDRM framebuffer mirror & dynamic OS gamepad bridge
+    ├── fb0_mirror.c                     <- Source code for fb0_mirror
+    ├── Install_NFSU2_Thai.sh            <- Standalone CLI installer
+    ├── Uninstall_NFSU2_Thai.sh          <- Standalone CLI uninstaller
+    ├── NFSU2_Language_Thai.sh           <- Standalone CLI language switcher: Thai
+    ├── NFSU2_Language_English.sh        <- Standalone CLI language switcher: English
+    ├── NFSU2_Intro_Skip.sh              <- Standalone CLI fast boot switcher
+    ├── NFSU2_Intro_Restore.sh           <- Standalone CLI intro restore switcher
     ├── generate_icons.py                <- Thumbnail generator script
     └── images/                          <- 512x512 launcher thumbnails
 ```
@@ -181,6 +218,7 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 │   ├── NFSU2-image.png                  <- 250x375 Box Art for EmulationStation / Ports
 │   └── NFSU2-thumb.png                  <- 512x512 Cover Art for EmulationStation / Ports
 └── nfsu2/
+    ├── .nfsu2_thai                      <- Active installation marker flag
     ├── nfsu2.aarch64                    <- Active ARM64 recompiled binary
     ├── nfsu2.aarch64.v10                <- Binary for v1.0 exe (87,349,296 bytes)
     ├── nfsu2.aarch64.v12                <- Binary for v1.2 exe (88,589,712 bytes)
@@ -189,7 +227,7 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
     ├── port.json                        <- PortMaster metadata
     ├── log.txt                          <- Standard execution log
     ├── launcher.log                     <- Clocks, memory, and governor diagnostic log
-    ├── .backup_thai/                    <- Backup of original files created by Install_NFSU2_Thai.sh
+    ├── .backup_thai/                    <- Backup of original files created during install
     ├── widescreen/
     │   └── NFSUnderground2.WidescreenFix.dat
     └── gamedata/                        <- Retail PC game assets
@@ -205,16 +243,11 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
         └── LANGUAGES/                   <- English.bin, Thailand.bin, etc.
 
 /roms/tools/
-├── NFSU2_Language_Thai.sh               <- Switch in-game language to Thai
-├── NFSU2_Language_English.sh            <- Switch in-game language to English
-├── NFSU2_Toggle_Intro.sh                <- Toggle intro video playback (skip logos)
-├── Uninstall_NFSU2_Thai.sh              <- Restore original game & uninstall tools (auto-hides nfsu2_thai/)
-├── images/
-│   ├── NFSU2_Language_Thai-thumb.png
-│   ├── NFSU2_Language_English-thumb.png
-│   ├── NFSU2_Toggle_Intro-thumb.png
-│   └── Uninstall_NFSU2_Thai-thumb.png
-└── nfsu2_thai/                          <- Installed tools package directory (auto-hidden in playfe via stem match; preserved on uninstall for re-installation)
+└── nfsu2_thai/                          <- Self-contained Thai Manager tools package (No clutter in /roms/tools/)
+    ├── NFSU2_Thai.sh                    <- Master TUI launcher (chmod 755)
+    ├── gamedata/                        <- Thai localization data assets
+    ├── images/                          <- Cover art & thumbnails
+    └── app/                             <- Engine binaries (fb0_mirror) and standalone CLI tools
 ```
 
 ---
@@ -306,10 +339,12 @@ To support handheld users who cannot run Linux shell scripts or terminal tools o
   ```text
   nfsu2_thai_copy_paste.zip
   ├── README_INSTALL.txt                   <- Clear installation instructions
+  ├── NFSU2.sh                             <- Master launcher (defaults to NFSU2_LANG=Thai)
   ├── images/                              <- Ports cover art (safe drop-in)
   │   ├── NFSU2-image.png                  <- 250x375 Box Art
   │   └── NFSU2-thumb.png                  <- 512x512 Cover Art
   └── nfsu2/                               <- Pre-patched drop-in game folder
+      ├── nfsu2.cfg                        <- Runtime config (NFSU2_LANG=Thai, performance profile)
       ├── nfsu2.aarch64                    <- Pre-patched ARM64 binary (unlocked universal subtitles)
       ├── nfsu2.aarch64.v10                <- Pre-patched binary mirror for v1.0
       └── gamedata/
@@ -320,48 +355,37 @@ To support handheld users who cannot run Linux shell scripts or terminal tools o
   ```
 * **Installation Workflow**:
   1. Extract the zip file on PC.
-  2. Drag and drop the `nfsu2` folder directly into `/roms/ports/` on the MicroSD card (overwriting existing files in `/roms/ports/nfsu2/`).
-  3. Ensure `NFSU2_LANG=Thai` is set in `/roms/ports/nfsu2/nfsu2.cfg`.
-  4. Launch the game from EmulationStation / Ports menu.
+  2. Drag and drop all files and folders (`NFSU2.sh`, `nfsu2`, `images`) directly into `/roms/ports/` on the MicroSD card (choose "Replace All" when prompted to overwrite existing files).
+  3. Launch the game from EmulationStation / Ports menu. Thai language and subtitles will work automatically!
 * **Build Script**: Run `python build_copypaste_pack.py` (Linux/Cross-platform) or `powershell -File build_copypaste_pack.ps1` (Windows native).
 
 ### 10.2 Tools Installer Distribution Pack (`nfsu2_thai.zip`)
-* **Target Users**: Users on playOS wanting autonomous installation via the TOOLS menu or terminal (`Install_NFSU2_Thai.sh`), along with on-device language switchers (`NFSU2_Language_Thai.sh`, `NFSU2_Language_English.sh`).
-* **Target Package Location**: `dist/nfsu2_thai.zip` (~4.1 MB).
+* **Target Users**: Users on playOS / ArkOS wanting an all-in-one Smart TUI manager via the TOOLS menu (`NFSU2_Thai.sh`), controlling installation, language switching, fast boot, and uninstallation in a single clean interface without polluting `/roms/tools/`.
+* **Target Package Location**: `dist/nfsu2_thai.zip` (~4.06 MB, Lean & Anti-Clutter).
 * **Package Internal Structure**:
   ```text
   nfsu2_thai.zip
-  ├── README.txt                           <- Clean root installation manual (Thai)
-  └── nfsu2_thai/                          <- Dedicated tools package folder
-      ├── Install_NFSU2_Thai.sh            <- Main installer script
-      ├── images/                          <- Cover art & thumbnails (512x512)
-      │   ├── NFSU2-image.png
-      │   ├── NFSU2-thumb.png
-      │   ├── NFSU2_Language_Thai-thumb.png
-      │   ├── NFSU2_Language_English-thumb.png
-      │   ├── NFSU2_Toggle_Intro-thumb.png
-      │   └── Uninstall_NFSU2_Thai-thumb.png
-      ├── gamedata/                        <- Game data patch assets
-      │   ├── SPEED2.EXE                   <- Patched executable (4,788,224 bytes)
-      │   └── LANGUAGES/
-      │       ├── LanguageTextures.bin
-      │       └── Thailand.bin             <- Patched Thai translation (264,184 bytes)
-      └── app/                             <- Handheld launcher scripts & assets
-          ├── NFSU2_Language_Thai.sh       <- Switch game language to Thai
-          ├── NFSU2_Language_English.sh    <- Switch game language to English
-          ├── NFSU2_Toggle_Intro.sh        <- Toggle intro cutscenes (Skip/Restore)
-          ├── Uninstall_NFSU2_Thai.sh      <- Restore backup & clean TOOLS menu
-          ├── generate_icons.py            <- Icon generator
-          └── images/                      <- Launcher thumbnails mirror
+  ??? README.txt                           <- Clean root installation manual (Thai)
+  ??? nfsu2_thai/                          <- Dedicated tools package folder
+      ??? NFSU2_Thai.sh                    <- Master TUI Manager (Install, Language, Fast Boot, Uninstall)
+      ??? images/                          <- Ports & Tools cover art (512x512)
+      ?   ??? NFSU2-image.png              <- 250x375 Box Art
+      ?   ??? NFSU2-thumb.png              <- 512x512 Cover Art
+      ??? gamedata/                        <- Game data patch assets
+      ?   ??? SPEED2.EXE                   <- Patched executable (4,788,224 bytes)
+      ?   ??? LANGUAGES/
+      ?       ??? LanguageTextures.bin     <- HD Thai font textures (1,286,144 bytes)
+      ?       ??? Thailand.bin             <- Patched Thai translation (264,184 bytes)
+      ??? app/                             <- Internal runtime engine
+          ??? fb0_mirror                   <- KMSDRM mirror & dynamic OS gamepad bridge (ARM64 binary)
   ```
 * **Installation Workflow on R36H**:
-  1. Extract `nfsu2_thai.zip` to `/roms/tools/` on the device MicroSD card.
-  2. Run `sudo bash /roms/tools/Install_NFSU2_Thai.sh` (via SSH/Terminal) or launch it directly if registered in the TOOLS menu.
-  3. The installer automatically backs up original game files to `/roms/ports/nfsu2/.backup_thai/`, patches `SPEED2.EXE` and `Thailand.bin`, unlocks ARM64 subtitles, sets `NFSU2_LANG=Thai`, and places language switcher shortcuts in `/roms/tools/`.
-* **Build Scripts (Local project workflow)**:
+  1. Extract `nfsu2_thai.zip` to `/roms/tools/` on the device MicroSD card (yielding `/roms/tools/nfsu2_thai/`).
+  2. Launch `NFSU2_Thai.sh` directly (via playOS File Manager or ArkOS Tools menu).
+  3. The TUI manager handles installation, language switching, fast boot, and uninstallation dynamically in real-time.
+* **Build Scripts**:
   * Run `python build_tools_pack.py` (Linux / Cross-platform) or `powershell -File build_tools_pack.ps1` (Windows native).
   * Automatically packages `tools/nfsu2_thai` into `dist/nfsu2_thai.zip` completely within this project.
-  * Once built, copy `dist/nfsu2_thai.zip` (or extract) to `D:\r36h\tools\nfsu2_thai` or deploy directly to device `/roms/tools/`.
 
 
 ---
@@ -397,7 +421,7 @@ flowchart TD
   * Check that tool shortcuts appear in the handheld UI:
     * `NFSU2_Language_Thai.sh`
     * `NFSU2_Language_English.sh`
-    * `NFSU2_Toggle_Intro.sh`
+    * `NFSU2_Intro_Skip.sh` and `NFSU2_Intro_Restore.sh`
     * `Uninstall_NFSU2_Thai.sh`
 
 ### 11.2 Phase 2: In-Game Runtime & Controls Lifecycle Verification
@@ -422,9 +446,9 @@ flowchart TD
   3. Run `sudo bash /roms/tools/NFSU2_Language_Thai.sh` -> Check `grep NFSU2_LANG /roms/ports/nfsu2/nfsu2.cfg` outputs `NFSU2_LANG=Thai`.
   4. Test game dry-run in Thai (`--lang=Thai`).
 * **Intro Video Toggle Cycle**:
-  1. Run `sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null` -> Verify `MOVIES/_FMVOpening.vp6` backup is created and `FMVOpening.vp6` replaced with dummy `blank.vp6`.
+  1. Run `sudo bash /roms/tools/NFSU2_Intro_Skip.sh < /dev/null` -> Verify `MOVIES/_FMVOpening.vp6` backup is created and `FMVOpening.vp6` is bypassed.
   2. Verify game boots directly to main menu without playing intro logos.
-  3. Run `sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null` again -> Verify files are restored back from `_*`.
+  3. Run `sudo bash /roms/tools/NFSU2_Intro_Restore.sh < /dev/null` -> Verify files are restored back from `_*`.
 
 ### 11.4 Phase 4: Clean Uninstallation & Rollback Lifecycle Verification
 * **Interactive Teardown**:
@@ -435,14 +459,14 @@ flowchart TD
   * Verify original `Thailand.bin` restored (MD5 matches untouched retail hash).
   * Verify `nfsu2.aarch64` restored to original recompiled binary.
   * Verify `NFSU2_LANG=English` in `nfsu2.cfg`.
-  * Verify any disabled movies are restored to original state.
-  * Verify tool shortcuts (`NFSU2_*.sh`, `Uninstall_*.sh`) and thumbnails are purged from `/roms/tools/` and `/roms/tools/images/`.
-  * Verify `.backup_thai/` is deleted.
-* **Frontend Menu Refresh**:
-  * Confirm `emulationstation.service` restarts and the Tools menu no longer displays the removed shortcuts.
+  * Verify intro movie playback status is preserved as-is.
+  * Verify language tool shortcuts (NFSU2_Language_*.sh, Uninstall_*.sh) and thumbnails are purged from /roms/tools/ (while NFSU2_Intro_Skip.sh and NFSU2_Intro_Restore.sh are preserved).
+  * Verify .backup_thai/ is preserved safely.
+* **Frontend Clean Exit**:
+  * Confirm the script exits cleanly (`exit 0`) and the frontend (`playfe` / `EmulationStation`) regains display control in 0.1s without restarting services or freezing.
 
 ### 11.5 Phase 5: Automated E2E Verification Script (SSH Runbook)
-Run this automated end-to-end verification sequence via SSH on the device:
+Connect to the device via SSH (`ssh ark@playos.local` or `ssh ark@svvv.local`, pass: `ark`) and run this automated verification sequence:
 
 ```bash
 # E2E Automated Lifecycle Test Sequence
@@ -456,10 +480,10 @@ grep -q "NFSU2_LANG=Thai" /roms/ports/nfsu2/nfsu2.cfg && echo "Config Thai OK" |
 echo "=== 3. TEST DRY RUN (THAI) ==="
 timeout 4 /roms/ports/nfsu2/nfsu2.aarch64 /roms/ports/nfsu2/gamedata --lang=Thai
 
-echo "=== 4. TEST INTRO TOGGLE ==="
-sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null
+echo "=== 4. TEST INTRO SKIP AND RESTORE ==="
+sudo bash /roms/tools/NFSU2_Intro_Skip.sh < /dev/null
 test -f /roms/ports/nfsu2/gamedata/MOVIES/_FMVOpening.vp6 && echo "Intro Skip OK" || echo "Intro Skip FAILED"
-sudo bash /roms/tools/NFSU2_Toggle_Intro.sh < /dev/null
+sudo bash /roms/tools/NFSU2_Intro_Restore.sh < /dev/null
 test ! -f /roms/ports/nfsu2/gamedata/MOVIES/_FMVOpening.vp6 && echo "Intro Restore OK" || echo "Intro Restore FAILED"
 
 echo "=== 5. TEST LANGUAGE SWITCH ==="
@@ -470,7 +494,7 @@ grep -q "NFSU2_LANG=Thai" /roms/ports/nfsu2/nfsu2.cfg && echo "Switch Thai OK" |
 
 echo "=== 6. TEST UNINSTALL ==="
 sudo bash /roms/tools/Uninstall_NFSU2_Thai.sh < /dev/null
-test ! -d /roms/ports/nfsu2/.backup_thai && echo "Backup Cleaned OK" || echo "Backup Cleaned FAILED"
+test -d /roms/ports/nfsu2/.backup_thai && echo "Backup Preserved OK" || echo "Backup Preserved FAILED"
 grep -q "NFSU2_LANG=English" /roms/ports/nfsu2/nfsu2.cfg && echo "Config English OK" || echo "Config FAILED"
 
 echo "=== 7. RE-INSTALL FOR USER ==="

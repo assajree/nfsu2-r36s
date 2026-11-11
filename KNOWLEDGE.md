@@ -118,17 +118,29 @@ The development suite in the repository root (`./`) is organized into three sing
 
 ## 6. Handheld Tools Suite (`tools/nfsu2_thai/`) & playOS Integration
 
-### 6.1 Universal Stem-Matching Auto-Hide Standard
-* **Constraint:** `clean_dir ⊆ clean_launcher`, `length(clean_dir) > 4`.
-* Subfolder: `/roms/tools/nfsu2_thai/` $\rightarrow$ `clean_dir` = `"nfsu2thai"` (length 9).
-* Launchers:
-  * `Setup_NFSU2_Thai.sh` $\rightarrow$ `"setupnfsu2thai"` (Contains `"nfsu2thai"`) $\rightarrow$ **Auto-Hidden!**
-  * `Uninstall_NFSU2_Thai.sh` $\rightarrow$ `"uninstallnfsu2thai"` (Contains `"nfsu2thai"`) $\rightarrow$ **Auto-Hidden!**
-* `playfe` automatically skips scanning `/roms/tools/nfsu2_thai/`, keeping the TOOLS menu pristine without leaking internal files.
+### 6.1 playOS Recursive `.sh` Scanning & Strict Anti-Clutter Invariant
+* **playOS (`playfe`) Recursive Scan Discovery:**
+  * In **playOS**, `playfe` recursively traverses all directories and subfolders within `/roms/tools/` looking for executable `.sh` scripts.
+  * **Critical Behavior:** Even if shell scripts are tucked away into nested subfolders like `nfsu2_thai/app/`, `playfe` will index and display **every single `.sh` file** on the handheld's main TOOLS menu.
+  * **Strict Anti-Clutter Invariant:**
+    1. Tool distribution packages must retain **ONLY the essential user-facing `.sh` entrypoint** (e.g. single centralized Smart TUI `NFSU2_Thai.sh`).
+    2. **Never bundle auxiliary, fallback, or separate CLI helper `.sh` scripts** (e.g. `Install_*.sh`, `Uninstall_*.sh`, `NFSU2_Language_*.sh`, `NFSU2_Intro_*.sh`) inside subfolders, as doing so pollutes the frontend menu with redundant entries.
+    3. Binary helpers must be compiled native ELF binaries (e.g. `fb0_mirror`) rather than `.sh` wrappers to remain hidden from the frontend game/tool list.
 
-### 6.2 Deduplication & Save File Omission Rules
+### 6.2 Universal Stem-Matching Auto-Hide Standard
+* **Constraint:** `clean_dir ? clean_launcher`, `length(clean_dir) > 4`.
+* Subfolder: `/roms/tools/nfsu2_thai/` ? `clean_dir` = "nfsu2thai" (length 9).
+* Launchers:
+  * `NFSU2_Thai.sh` ? "nfsu2thai" (Matches "nfsu2thai") ? **Auto-Hidden!**
+* When an outer matching launcher is present, `playfe` skips scanning the matching subfolder. However, if any subfolder lacks a matching outer stem, all internal `.sh` files are exposed on-screen.
+
+### 6.3 Deduplication & Save File Omission Rules
 1. **Case-Sensitivity Deduplication:** Windows PC distributions often contain both `SPEED2.EXE` and `speed2.exe`. In `app/gamedata/`, only `SPEED2.EXE` is bundled. `Setup_NFSU2_Thai.sh` automatically copies and mirrors it as `speed2.exe` on target devices, reducing package size by 2.3 MB.
 2. **No Bundled Save Games:** Tools packages must **never** bundle save games (`AppData/`). `Setup_NFSU2_Thai.sh` respects user progression and creates blank profile containers only if none exist.
+
+### 6.4 Dual-Target Ports Support & Side-by-Side Packaging
+* **Primary Target (`/roms/ports/`):** The `PORTS` menu is enabled by default across all systems (`playOS`, `dArkOS`, and `ArkOS`), whereas `TOOLS` is disabled by default in stock `playOS 4.0`. Tools must support `/roms/ports/` as the primary zero-setup target.
+* **Side-by-Side Structure:** The user launcher (e.g. `NFSU2_Thai.sh`) sits side-by-side with its internal folder (`nfsu2_thai/`) and `images/` directory.
 
 ---
 
@@ -136,7 +148,66 @@ The development suite in the repository root (`./`) is organized into three sing
 
 | Package Name | Target Location | Size | Contents |
 | :--- | :--- | :---: | :--- |
-| **`nfsu2_thai_copy_paste.zip`** | `/roms/ports/` | ~63.6 MB | Drop-in copy-paste mod for R36H/R36S: `nfsu2/` (pre-patched `nfsu2.aarch64`, `nfsu2.aarch64.v10`, `gamedata/SPEED2.EXE`, `Thailand.bin`) & `README_INSTALL.txt` |
+| **`nfsu2_thai_copy_paste.zip`** | `/roms/ports/` | ~67.5 MB | Drop-in copy-paste mod for R36H/R36S: `nfsu2/` (pre-patched `nfsu2.aarch64`, `nfsu2.aarch64.v10`, `gamedata/SPEED2.EXE`, `Thailand.bin`, `LanguageTextures.bin`) & `README_INSTALL.txt` |
 | **`NFSU2-R36S-Thai-v1.1.0.zip`** | `/roms/ports/` | ~98 MB | Full PortMaster port: `NFSU2.sh`, `nfsu2/` (pre-patched ARM64 binary, `SPEED2.EXE`, `Thailand.bin`, widescreen fix, 30 FPS config) |
 | **`NFSU2-Thai-Dropin-Pack.zip`** | PC / Game Folder | ~4.6 MB | Drop-in mod: Patched `SPEED2.EXE`, `Thailand.bin`, Save profiles (Jane, Racer, svvv), `README_THAI_INSTALL.txt` |
-| **`nfsu2_thai.zip`** | `/roms/tools/` | ~4.1 MB | playOS Tools installer: `Install_NFSU2_Thai.sh`, `nfsu2_thai/` (autonomous setup & language switchers) |
+| **`nfsu2_thai.zip`** | `/roms/tools/` | ~4.06 MB | Lean All-in-One Smart TUI Manager: Single entrypoint (`NFSU2_Thai.sh`), `app/fb0_mirror`, cover art, and game assets (anti-clutter) |
+
+---
+
+## 8. Handheld TUI Console & Dual-Frontend Input Architecture (`fb0_mirror`)
+
+### 8.1 Hardware Controller EVDEV Protocol & Codes
+Under Linux `/dev/input/event*`, the built-in R36H/R36S gamepad (`GO-Super Gamepad`) emits:
+* `BTN_SOUTH` (`304`): Physical Button **B** (Bottom)
+* `BTN_EAST`  (`305`): Physical Button **A** (Right)
+* `BTN_NORTH` (`307`): Physical Button **X** (Top)
+* `BTN_WEST`  (`308`): Physical Button **Y** (Left)
+* `BTN_SELECT` (`704`): **Select** button
+* `BTN_START`  (`705`): **Start** button
+* D-Pad: `544` (UP), `545` (DOWN), `546` (LEFT), `547` (RIGHT)
+
+### 8.2 Dual-Frontend A/B Arbitration Rule
+Because different frontends have contradictory conventions for "Confirm/Cancel" swaps, `fb0_mirror` implements real-time dynamic arbitration:
+
+```text
+Priority 1: /home/ark/.config/playfe/playfe.cfg (playOS active frontend)
+├── If swap_ab=true          --> Button A (305) = OK (Enter)   | Button B (304) = Back (Double ESC)
+└── If swap_ab=false / unset --> Button B (304) = OK (Enter)   | Button A (305) = Back (Double ESC)
+
+Priority 2: Fallback when playfe.cfg is absent (Pure ArkOS / EmulationStation)
+├── If InvertButtons="true" in es_settings.cfg OR /var/cache/Switch_AB exists:
+│                            --> Button B (304) = OK (Enter)   | Button A (305) = Back (Double ESC)
+└── Otherwise (Normal ES)    --> Button A (305) = OK (Enter)   | Button B (304) = Back (Double ESC)
+```
+
+### 8.3 Console ANSI Injection Contract
+* Keys are injected into `/dev/tty1` via `ioctl(tty_fd, TIOCSTI, &c)`.
+* **OK / Select**: Injects `\n` (Enter) to trigger highlighted dialog buttons.
+* **Cancel / Back / Exit**: Injects `\033\033` (Double ESC). In Linux `dialog`, this terminates `--menu` immediately with exit code 1 (clean exit), and aborts `--yesno` / dismisses `--msgbox` without delay.
+
+### 8.4 Parent-Child Frontend Deadlock Prevention (Never Restart Frontend from Menu Scripts)
+* **The 90-Second Freeze Bug:** If a script launched from the menu invokes `systemctl restart playfe.service` or `systemctl restart emulationstation.service`, `systemctl` synchronously blocks waiting for the parent service to restart. Meanwhile, systemd waits for all child processes in the active service cgroup (including the script itself) to exit -> **90-second systemd deadlock**, leaving a blank screen with a blinking cursor at the top left.
+* **Frontend Invariant:** `playfe` runs scripts via `nice -n -19 %ROM%`, pauses rendering, and automatically resumes within 0.1s once the script exits with `exit 0`. Additionally, `playfe` watches the directory via inotify (`[playfe] library changed on disk: reloaded`) and updates the menu automatically.
+* **Rule:** Never invoke `systemctl restart` on the frontend service from inside any menu-launched script.
+
+### 8.5 Handheld Single-Choice Standard (Avoid `dialog --radiolist`)
+* **Radiolist Spacebar Trap:** In Linux `dialog`, `--radiolist` requires pressing `Space` to move the selection dot `(*)`, and then `Enter` to confirm. On gamepads mapped with `gptokeyb`, button `A` maps to `Enter`. Pressing `A` without `Space` submits the pre-checked default instead of the highlighted item.
+* **Rule:** Always use `dialog --menu` with `--default-item "$CURRENT_VAL"` for single-choice option selections on handheld consoles.
+
+### 8.6 Action Completion & Exit Lifecycle Standard
+* **Install and Uninstall (One-Shot Actions):** Show completion summary (`Press A or Enter to exit.`) and immediately call `exit 0` to return to the frontend.
+* **Single-Config Tools (1 setting):** Saving settings completes user intent; show summary and call `exit 0`.
+* **Multi-Config Tools ($\ge 2$ settings, e.g. `NFSU2_Thai.sh`):** Saving one setting displays `Press A or Enter to continue.` and returns to the Setup Menu so the user can configure additional options before exiting manually via `Exit` (or Button `B`).
+* **Cancel / Back (Button B):** Always returns to the Setup Menu.
+
+---
+
+## 9. Device Connectivity & Network Discovery Standards
+
+### 9.1 mDNS Hostname Resolution
+* R36H/R36S running playOS or dArkOS ships with an active Avahi/mDNS daemon (`.local` domain resolution).
+* **playOS Hostname (Default/Active):** `playos.local` (discoverable via `ping playos.local` or `Resolve-DnsName playos.local`).
+* **dArkOS Hostname (User Setup):** `svvv.local` (active when booted into dArkOS).
+* **SSH Remote Access:** Connect via `ssh ark@playos.local` (or `ssh ark@svvv.local`), default credentials `ark:ark`. Root escalation via `sudo -i`.
+* **Zero-Prompt Discovery:** Automated test runners and agents should prioritize resolving `.local` mDNS hostnames before prompting the user for an IP address.
