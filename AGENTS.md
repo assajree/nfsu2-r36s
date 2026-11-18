@@ -6,6 +6,7 @@ This document serves as the authoritative operational and development reference 
 > * Localization, Thai fonts, and subtitle reverse-engineering are documented in **[`KNOWLEDGE.md`](./KNOWLEDGE.md)**.
 > * Cutscene / FMV video performance reverse-engineering and ARM64 NEON binary patch specifications (`patch_video.py`) are documented in **[`KNOWLEDGE_VIDEO.md`](./KNOWLEDGE_VIDEO.md)**.
 > * Gamepad input architecture, Menu/Driving mode disambiguation, compiler inlining invariants, and Joypad GPS patch (`patch_gps.py`) are documented in **[`KNOWLEDGE_INPUT.md`](./KNOWLEDGE_INPUT.md)**.
+> * Save profile binary structure, controller binding block (0xD278..0xD6B6), and 3-tier NFSU2 CRC32 checksum reverse-engineering are documented in **[`KNOWLEDGE_SAVE.md`](./KNOWLEDGE_SAVE.md)**.
 > * Source code modification & R36H native build plans for upstream Pull Requests are separated into:
 >   1. **[`PLAN_PR_VIDEO_PERF.md`](./PLAN_PR_VIDEO_PERF.md)** — PR #1: Cutscene/FMV Video Performance Optimization & R36H Native Build Guide
 >   2. **[`PLAN_PR_THAI_SUBTITLES.md`](./PLAN_PR_THAI_SUBTITLES.md)** — PR #2: Native Thai Language & Universal Subtitles Support
