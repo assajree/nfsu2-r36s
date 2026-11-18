@@ -6,6 +6,8 @@
 #                1. Install / Uninstall Thai Edition
 #                2. Switch Language: Thai <-> English
 #                3. Toggle Intro Movies: Skip (Fast Boot 1s) <-> Restore
+# Archetype: Archetype 3 (One-Shot Interactive TUI Tool, Flat Side-by-Side)
+# Standard: Native /dev/tty1 Console + gptokeyb (Zero fb0_mirror)
 # UI Language: 100% Pure ASCII English (Console Font Invariant)
 # ==============================================================================
 
@@ -14,7 +16,12 @@ if [ "$(id -u)" -ne 0 ]; then
     exec sudo -E "$0" "$@"
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# ------------------------------------------------------------------------------
+# Dynamic Location & Target Resolution (PortMaster Standard)
+# ------------------------------------------------------------------------------
+REAL_SCRIPT="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo "$0")"
+SCRIPT_DIR="$(cd "$(dirname "$REAL_SCRIPT")" && pwd)"
+SCRIPT_NAME="$(basename "$REAL_SCRIPT")"
 
 # 2. Locate NFSU2 Port Directory
 NFSU2_DIR=""
@@ -36,63 +43,125 @@ BACKUP_DIR="$NFSU2_DIR/.backup_thai"
 CFG_FILE="$NFSU2_DIR/nfsu2.cfg"
 MOVIES_DIR="$GAMEDATA/MOVIES"
 
-# 3. Locate fb0_mirror Binary
-MIRROR_BIN=""
-for cand_bin in \
-    "$SCRIPT_DIR/app/fb0_mirror" \
-    "$SCRIPT_DIR/fb0_mirror" \
-    "/roms/tools/nfsu2_thai/app/fb0_mirror" \
-    "/roms/tools/setup_ui/fb0_mirror" \
-    "/roms/tools/setup_ui/app/fb0_mirror"; do
-    if [ -x "$cand_bin" ]; then
-        MIRROR_BIN="$cand_bin"
+# Locate Thai Game Assets (Search PortMaster flat directory first)
+THAI_ASSETS_DIR=""
+for cand_assets in \
+    "$SCRIPT_DIR/nfsu2thai/gamedata" \
+    "$SCRIPT_DIR/gamedata" \
+    "/roms/ports/nfsu2thai/gamedata" \
+    "/roms/tools/nfsu2_thai/nfsu2thai/gamedata" \
+    "/roms/tools/nfsu2_thai/gamedata"; do
+    if [ -d "$cand_assets" ] && [ -f "$cand_assets/LANGUAGES/Thailand.bin" ]; then
+        THAI_ASSETS_DIR="$cand_assets"
         break
     fi
 done
 
-# 4. Detect Environment (playOS vs ArkOS) & Prepare Display
-IS_PLAYOS=0
-if pgrep -x "FindManager" >/dev/null 2>&1 || pgrep -x "playfe" >/dev/null 2>&1; then
-    IS_PLAYOS=1
+# ------------------------------------------------------------------------------
+# Environment Detection & Gamepad Input Setup (Native /dev/tty1 + gptokeyb)
+# ------------------------------------------------------------------------------
+IS_SSH=0
+if [ -n "$SSH_TTY" ] || [ -n "$SSH_CLIENT" ] || [ -n "$SSH_CONNECTION" ]; then
+    IS_SSH=1
 fi
 
-MIRROR_PID=""
+GPTOKEYB_PID=""
+GPTOKEYB_BIN=""
+CHOICE_TMP="/tmp/nfsu2_thai_choice.$$"
+GPTK_CONF="/tmp/nfsu2_thai_keys.gptk"
 
-cleanup_all() {
-    if [ -n "$MIRROR_PID" ]; then
-        kill -TERM "$MIRROR_PID" 2>/dev/null || true
-        wait "$MIRROR_PID" 2>/dev/null || true
+cleanup() {
+    rm -f "$CHOICE_TMP" "$GPTK_CONF" 2>/dev/null || true
+    if [ -n "$GPTOKEYB_PID" ]; then
+        kill -9 "$GPTOKEYB_PID" 2>/dev/null || true
     fi
-    printf "\033c" > /dev/tty1 2>/dev/null || true
-    if [ "$IS_PLAYOS" -eq 1 ]; then
-        killall -CONT FindManager playfe 2>/dev/null || true
+    pkill -9 -f "gptokeyb" 2>/dev/null || true
+    killall -9 gptokeyb 2>/dev/null || true
+
+    if [ "$IS_SSH" -eq 0 ]; then
+        printf "\033c\e[?25h" > /dev/tty1 2>/dev/null || true
     fi
 }
-trap cleanup_all EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
-# Freeze playOS frontend if present
-if [ "$IS_PLAYOS" -eq 1 ]; then
-    killall -STOP FindManager playfe 2>/dev/null || true
+# Setup TTY display routing & Controller Bridge
+if [ "$IS_SSH" -eq 0 ]; then
+    if [ -x "/opt/inttools/gptokeyb" ]; then
+        GPTOKEYB_BIN="/opt/inttools/gptokeyb"
+    elif [ -x "/usr/local/bin/gptokeyb" ]; then
+        GPTOKEYB_BIN="/usr/local/bin/gptokeyb"
+    elif command -v gptokeyb >/dev/null 2>&1; then
+        GPTOKEYB_BIN="$(command -v gptokeyb)"
+    fi
+
+    if [ -n "$GPTOKEYB_BIN" ]; then
+        chmod 666 /dev/uinput 2>/dev/null || true
+        export SDL_GAMECONTROLLERCONFIG_FILE="/opt/inttools/gamecontrollerdb.txt"
+        pkill -9 -f "gptokeyb" 2>/dev/null || true
+        killall -9 gptokeyb 2>/dev/null || true
+        sleep 0.1
+
+        # Resolve Dynamic A/B Button Mapping
+        # Priority 1 (playfe): /home/ark/.config/playfe/playfe.cfg -> swap_ab=true means A=OK, B=Back
+        # Priority 2 (ArkOS): es_settings.cfg InvertButtons or /var/cache/Switch_AB
+        SWAP_AB=0
+
+        if [ -f "/home/ark/.config/playfe/playfe.cfg" ]; then
+            if grep -iq "^swap_ab=true" "/home/ark/.config/playfe/playfe.cfg" 2>/dev/null; then
+                SWAP_AB=1
+            fi
+        elif [ -f "/var/cache/Switch_AB" ] || grep -iq 'InvertButtons.*value="true"' "/home/ark/.emulationstation/es_settings.cfg" 2>/dev/null; then
+            SWAP_AB=1
+        fi
+
+        if [ "$SWAP_AB" -eq 1 ]; then
+            A_BIND="enter"
+            B_BIND="esc"
+        else
+            A_BIND="esc"
+            B_BIND="enter"
+        fi
+
+        cat << EOF > "$GPTK_CONF"
+up = up
+down = down
+left = left
+right = right
+a = $A_BIND
+b = $B_BIND
+x = space
+y = space
+select = tab
+start = enter
+EOF
+
+        "$GPTOKEYB_BIN" -1 "$SCRIPT_NAME" -c "$GPTK_CONF" >/dev/null 2>&1 &
+        GPTOKEYB_PID=$!
+    fi
+
+    setfont /usr/share/consolefonts/Lat7-TerminusBold20x10.psf.gz -C /dev/tty1 2>/dev/null || \
+    setfont /usr/share/consolefonts/Lat7-Terminus16.psf.gz -C /dev/tty1 2>/dev/null || true
+    printf "\033c\e[?25l" > /dev/tty1 2>/dev/null || true
+
+    DIALOG_IN="/dev/tty1"
+    DIALOG_OUT="/dev/tty1"
+    export TERM=linux
+else
+    DIALOG_IN="/dev/stdin"
+    DIALOG_OUT="/dev/stdout"
 fi
 
-# Set readable console font on /dev/tty1
-setfont /usr/share/consolefonts/Lat7-TerminusBold20x10.psf.gz -C /dev/tty1 2>/dev/null || \
-setfont /usr/share/consolefonts/Lat7-Terminus16.psf.gz -C /dev/tty1 2>/dev/null || true
-printf "\033c\e[?25l" > /dev/tty1 2>/dev/null || true
-
-# Start fb0_mirror for KMSDRM streaming and controller input bridge
-if [ -n "$MIRROR_BIN" ]; then
-    "$MIRROR_BIN" >/dev/null 2>&1 &
-    MIRROR_PID=$!
-    sleep 0.3
+# Ensure dialog binary is available
+if ! command -v dialog >/dev/null 2>&1; then
+    echo "[!] ERROR: 'dialog' package is not installed." >&2
+    exit 1
 fi
 
-export TERM=linux
-
-# 5. Intro files list
+# ------------------------------------------------------------------------------
+# 5. Intro Movies List & Status Scanner
+# ------------------------------------------------------------------------------
 INTRO_FILES=("ealogo.vp6" "THX_logo.vp6" "FMVOpening.vp6" "PSA.vp6")
 
-# 6. Status Scanner
 scan_status() {
     # Check Thai Patch Status via marker flag
     THAI_INSTALLED=0
@@ -131,12 +200,14 @@ scan_status() {
     fi
 }
 
-# 7. Action Implementations
+# ------------------------------------------------------------------------------
+# 6. Action Implementations
+# ------------------------------------------------------------------------------
 
 do_install_thai() {
     dialog --backtitle "NFSU2 Thai Manager" --title "Fast Boot Option" \
         --yesno "\nWould you like to enable Fast Boot (Skip Intro Movies)?\n\n  * Yes : Skip EA/THX/Opening logos (Direct boot to Title Screen)\n  * No  : Keep original intro movie playback\n\nSelect < Yes > or < No >, or press < ESC > to cancel." \
-        12 66 < /dev/tty1 > /dev/tty1 2>/dev/null
+        12 66 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
     RC_FASTBOOT=$?
 
     if [ "$RC_FASTBOOT" -ne 0 ] && [ "$RC_FASTBOOT" -ne 1 ]; then
@@ -168,30 +239,26 @@ do_install_thai() {
 
         echo "30" ; echo "XXX" ; echo "Installing Thailand.bin and Thai font textures..." ; echo "XXX"
         mkdir -p "$GAMEDATA/LANGUAGES"
-        # Source resolution
-        for cand_bin in "$SCRIPT_DIR/gamedata/LANGUAGES/Thailand.bin" "$SCRIPT_DIR/Thailand.bin" "/roms/tools/nfsu2_thai/gamedata/LANGUAGES/Thailand.bin"; do
-            if [ -f "$cand_bin" ]; then
-                cp -f "$cand_bin" "$GAMEDATA/LANGUAGES/Thailand.bin"
-                cp -f "$cand_bin" "$GAMEDATA/LANGUAGES/thailand.bin" 2>/dev/null || true
-                break
+        if [ -n "$THAI_ASSETS_DIR" ]; then
+            if [ -f "$THAI_ASSETS_DIR/LANGUAGES/Thailand.bin" ]; then
+                cp -f "$THAI_ASSETS_DIR/LANGUAGES/Thailand.bin" "$GAMEDATA/LANGUAGES/Thailand.bin"
+                cp -f "$THAI_ASSETS_DIR/LANGUAGES/Thailand.bin" "$GAMEDATA/LANGUAGES/thailand.bin" 2>/dev/null || true
             fi
-        done
-        for cand_lt in "$SCRIPT_DIR/gamedata/LANGUAGES/LanguageTextures.bin" "$SCRIPT_DIR/LanguageTextures.bin" "/roms/tools/nfsu2_thai/gamedata/LANGUAGES/LanguageTextures.bin"; do
-            if [ -f "$cand_lt" ]; then
-                cp -f "$cand_lt" "$GAMEDATA/LANGUAGES/LanguageTextures.bin"
-                break
+            if [ -f "$THAI_ASSETS_DIR/LANGUAGES/LanguageTextures.bin" ]; then
+                cp -f "$THAI_ASSETS_DIR/LANGUAGES/LanguageTextures.bin" "$GAMEDATA/LANGUAGES/LanguageTextures.bin"
             fi
-        done
+        fi
         sleep 0.4
 
         echo "55" ; echo "XXX" ; echo "Patching SPEED2.EXE for Thai font streaming..." ; echo "XXX"
         PREPATCHED_EXE=""
-        for cand_exe in "$SCRIPT_DIR/gamedata/SPEED2.EXE" "$SCRIPT_DIR/SPEED2.EXE" "/roms/tools/nfsu2_thai/gamedata/SPEED2.EXE"; do
-            if [ -f "$cand_exe" ] && [ "$(stat -c%s "$cand_exe" 2>/dev/null || wc -c < "$cand_exe" | tr -d ' ')" -eq 4788224 ]; then
-                PREPATCHED_EXE="$cand_exe"
-                break
+        if [ -n "$THAI_ASSETS_DIR" ] && [ -f "$THAI_ASSETS_DIR/SPEED2.EXE" ]; then
+            fsize=$(stat -c%s "$THAI_ASSETS_DIR/SPEED2.EXE" 2>/dev/null || wc -c < "$THAI_ASSETS_DIR/SPEED2.EXE" | tr -d ' ')
+            if [ "$fsize" -eq 4788224 ]; then
+                PREPATCHED_EXE="$THAI_ASSETS_DIR/SPEED2.EXE"
             fi
-        done
+        fi
+
         if [ -n "$PREPATCHED_EXE" ]; then
             cp -f "$PREPATCHED_EXE" "$GAMEDATA/SPEED2.EXE"
             cp -f "$PREPATCHED_EXE" "$GAMEDATA/speed2.exe" 2>/dev/null || true
@@ -277,10 +344,10 @@ EOF
         touch "$NFSU2_DIR/.nfsu2_thai"
         sync
         echo "100" ; echo "XXX" ; echo "Installation completed successfully!" ; echo "XXX"
-        sleep 0.6
+        sleep 0.5
     ) | dialog --backtitle "NFSU2 Thai Manager" --title "Installing Thai Edition" \
         --gauge "\nApplying Thai translation, HD fonts & subtitles..." 8 54 0 \
-        > /dev/tty1 2>/dev/null
+        > "$DIALOG_OUT" 2>/dev/null
 
     if [ "$ENABLE_FASTBOOT" -eq 1 ]; then
         FASTBOOT_DESC="Intro movies skipped (Instant boot)"
@@ -289,16 +356,16 @@ EOF
     fi
 
     dialog --backtitle "NFSU2 Thai Manager" --title "Install Successful" \
-        --msgbox "\n  [OK] Thai Localization Installed Successfully!\n\n  * Game Engine : Thai fonts and subtitles unlocked\n  * Language    : Set to Thai - Subtitles active\n  * Fast Boot   : $FASTBOOT_DESC\n  * Backup      : Saved original files in .backup_thai/" \
-        12 60 < /dev/tty1 > /dev/tty1 2>/dev/null
+        --msgbox "\n  [OK] Thai Localization Installed Successfully!\n\n  * Game Engine : Thai fonts and subtitles unlocked\n  * Language    : Set to Thai (Subtitles active)\n  * Fast Boot   : $FASTBOOT_DESC\n  * Backup      : Saved original files in .backup_thai/\n\n  Press A or Enter to exit." \
+        13 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 
     exit 0
 }
 
 do_uninstall_thai() {
     dialog --backtitle "NFSU2 Thai Manager" --title "Confirm Uninstallation" \
-        --yesno "\nAre you sure you want to restore the original game files?\n\n* Restores original SPEED2.EXE and binaries from backup\n* Resets in-game language to English\n* Preserves player saves and .backup_thai/ safely" \
-        11 60 < /dev/tty1 > /dev/tty1 2>/dev/null
+        --yesno "\nAre you sure you want to restore original game files?\n\n* Restores original SPEED2.EXE and binaries from backup\n* Resets in-game language to English\n* Preserves player saves safely" \
+        11 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 
     if [ $? -ne 0 ]; then
         return
@@ -377,11 +444,11 @@ with open(target, "r+b") as f:
         echo "100" ; echo "XXX" ; echo "Uninstallation completed!" ; echo "XXX" ; sleep 0.4
     ) | dialog --backtitle "NFSU2 Thai Manager" --title "Restoring Original Game" \
         --gauge "\nRestoring untouched files from backup..." 8 54 0 \
-        > /dev/tty1 2>/dev/null
+        > "$DIALOG_OUT" 2>/dev/null
 
     dialog --backtitle "NFSU2 Thai Manager" --title "Restore Complete" \
-        --msgbox "\n  [OK] Original Game Files Restored Successfully!\n\n  * SPEED2.EXE and binaries restored from backup\n  * In-game language reset to English\n  * Player save games are 100% safe" \
-        11 58 < /dev/tty1 > /dev/tty1 2>/dev/null
+        --msgbox "\n  [OK] Original Game Files Restored Successfully!\n\n  * SPEED2.EXE and binaries restored from backup\n  * In-game language reset to English\n  * Player save games are 100% safe\n\n  Press A or Enter to exit." \
+        12 58 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 
     exit 0
 }
@@ -406,13 +473,13 @@ EOF
     sync
 
     if [ "$target_l" = "Thai" ]; then
-        msg="\n  [OK] Language switched to: THAI\n\n  * Subtitles and game text will display in Thai."
+        msg="\n  [OK] Language switched to: THAI\n\n  * Subtitles and game text will display in Thai.\n\n  Press A or Enter to continue."
     else
-        msg="\n  [OK] Language switched to: ENGLISH\n\n  * Game text will display in original English."
+        msg="\n  [OK] Language switched to: ENGLISH\n\n  * Game text will display in original English.\n\n  Press A or Enter to continue."
     fi
 
     dialog --backtitle "NFSU2 Thai Manager" --title "Language Switched" \
-        --msgbox "$msg" 9 56 < /dev/tty1 > /dev/tty1 2>/dev/null
+        --msgbox "$msg" 10 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 do_skip_intro() {
@@ -435,8 +502,8 @@ do_skip_intro() {
     sync
 
     dialog --backtitle "NFSU2 Thai Manager" --title "Fast Boot Enabled" \
-        --msgbox "\n  [OK] Fast Boot ENABLED - Instant Title Screen!\n\n  * Intro movies bypassed directly without video playback\n  * Game launches straight to Start Screen in ~1s - 0s flicker" \
-        10 60 < /dev/tty1 > /dev/tty1 2>/dev/null
+        --msgbox "\n  [OK] Fast Boot ENABLED - Instant Title Screen!\n\n  * Intro movies bypassed directly without video playback\n  * Game launches straight to Start Screen in ~1s\n\n  Press A or Enter to continue." \
+        11 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 do_restore_intro() {
@@ -454,16 +521,18 @@ do_restore_intro() {
 
     if [ $rc -gt 0 ]; then
         dialog --backtitle "NFSU2 Thai Manager" --title "Intro Movies Restored" \
-            --msgbox "\n  [OK] Intro Movies RESTORED Successfully!\n\n  * EA / THX logos, Opening FMV, and PSA will play normally" \
-            9 58 < /dev/tty1 > /dev/tty1 2>/dev/null
+            --msgbox "\n  [OK] Intro Movies RESTORED Successfully!\n\n  * EA / THX logos, Opening FMV, and PSA will play normally\n\n  Press A or Enter to continue." \
+            10 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
     else
         dialog --backtitle "NFSU2 Thai Manager" --title "Notice" \
-            --msgbox "\n  [i] No video backup files found to restore.\n\n  Fast Boot remains permanently active." \
-            9 58 < /dev/tty1 > /dev/tty1 2>/dev/null
+            --msgbox "\n  [i] No video backup files found to restore.\n\n  Fast Boot remains permanently active.\n\n  Press A or Enter to continue." \
+            10 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
     fi
 }
 
-# 8. Main Interactive Loop
+# ------------------------------------------------------------------------------
+# 7. Main Interactive Loop
+# ------------------------------------------------------------------------------
 while true; do
     scan_status
 
@@ -495,7 +564,7 @@ while true; do
         BACKTITLE="NFSU2 Thai Manager | Thai: $STATUS_PATCH | Lang: $CURRENT_LANG | Intro: $INTRO_STATUS"
         MENU_PROMPT="\nCurrent Settings:\n  * NFSU2 Thai   : $STATUS_PATCH\n  * Language     : $CURRENT_LANG\n  * Intro Movies : $INTRO_STATUS\n\nChoose an action below, or press < Exit > to quit:"
 
-        CHOICE=$(dialog \
+        dialog \
             --backtitle "$BACKTITLE" \
             --title "NFSU2 Thai Manager" \
             --ok-label "Select" \
@@ -505,7 +574,7 @@ while true; do
             "1" "$LABEL1" \
             "2" "$LABEL2" \
             "3" "$LABEL3" \
-            --output-fd 3 3>&1 < /dev/tty1 > /dev/tty1 2>/dev/null)
+            2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
     else
         # When NOT INSTALLED: Show ONLY Install option
         TAG1="install"
@@ -515,7 +584,7 @@ while true; do
         BACKTITLE="NFSU2 Thai Manager | Thai: $STATUS_PATCH | Lang: $CURRENT_LANG | Intro: $INTRO_STATUS"
         MENU_PROMPT="\nCurrent Settings:\n  * NFSU2 Thai   : $STATUS_PATCH\n  * Language     : $CURRENT_LANG\n  * Intro Movies : $INTRO_STATUS\n\nChoose an action below, or press < Exit > to quit:"
 
-        CHOICE=$(dialog \
+        dialog \
             --backtitle "$BACKTITLE" \
             --title "NFSU2 Thai Manager" \
             --ok-label "Select" \
@@ -523,10 +592,13 @@ while true; do
             --menu "$MENU_PROMPT" \
             15 60 1 \
             "1" "$LABEL1" \
-            --output-fd 3 3>&1 < /dev/tty1 > /dev/tty1 2>/dev/null)
+            2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
     fi
 
     RET=$?
+    CHOICE=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+
     if [ $RET -ne 0 ] || [ -z "$CHOICE" ]; then
         break
     fi
@@ -553,8 +625,8 @@ while true; do
                 do_restore_intro
             else
                 dialog --backtitle "NFSU2 Thai Manager" --title "Notice" \
-                    --msgbox "\n  [i] Intro videos were permanently deleted from storage.\n\n  Fast Boot remains permanently active." \
-                    9 58 < /dev/tty1 > /dev/tty1 2>/dev/null
+                    --msgbox "\n  [i] Intro videos were permanently deleted from storage.\n\n  Fast Boot remains permanently active.\n\n  Press A or Enter to continue." \
+                    10 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
             fi
             ;;
     esac

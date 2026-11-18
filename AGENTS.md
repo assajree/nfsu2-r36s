@@ -2,8 +2,20 @@
 
 This document serves as the authoritative operational and development reference for AI agents and developers working on the **Need for Speed: Underground 2 (Recompiled)** port running on the **R36H / R36S** handheld gaming console.
 
-> [!NOTE] Detailed Engineering Knowledge Base
-> Full reverse-engineering discoveries, ABI stack contracts, subtitle opcode disassembly, and binary structures are documented in **[`KNOWLEDGE.md`](./KNOWLEDGE.md)**.
+> [!NOTE] Detailed Engineering Knowledge Base & Pull Request Plans
+> * Localization, Thai fonts, and subtitle reverse-engineering are documented in **[`KNOWLEDGE.md`](./KNOWLEDGE.md)**.
+> * Cutscene / FMV video performance reverse-engineering and ARM64 NEON binary patch specifications (`patch_video.py`) are documented in **[`KNOWLEDGE_VIDEO.md`](./KNOWLEDGE_VIDEO.md)**.
+> * Gamepad input architecture, Menu/Driving mode disambiguation, compiler inlining invariants, and Joypad GPS patch (`patch_gps.py`) are documented in **[`KNOWLEDGE_INPUT.md`](./KNOWLEDGE_INPUT.md)**.
+> * Source code modification & R36H native build plans for upstream Pull Requests are separated into:
+>   1. **[`PLAN_PR_VIDEO_PERF.md`](./PLAN_PR_VIDEO_PERF.md)** — PR #1: Cutscene/FMV Video Performance Optimization & R36H Native Build Guide
+>   2. **[`PLAN_PR_THAI_SUBTITLES.md`](./PLAN_PR_THAI_SUBTITLES.md)** — PR #2: Native Thai Language & Universal Subtitles Support
+>   3. **[`PLAN_PR_JOYPAD_GPS.md`](./PLAN_PR_JOYPAD_GPS.md)** — PR #3: Joypad GPS Activation on World Map & Space Restoration
+
+> [!IMPORTANT] Operational Rule: Binary Patching — Inlining Detection & Multi-Site Verification
+> When analyzing or patching static binary recompiled engines (e.g. `nfsu2.aarch64`), always scan the entire `.text` segment for duplicated or inlined machine instruction sequences. Optimizing compilers frequently inline small static or internal linkage functions directly into caller loops (such as `main()`). Patchers must account for both standalone definitions and all inlined call sites to guarantee runtime effectiveness.
+
+> [!IMPORTANT] Operational Rule: ARM64 / NEON Binary Patch Verification (`as` & `objdump`)
+> Always verify hand-assembled ARM64 / NEON instruction words against GNU binutils (`/usr/bin/as` and `/usr/bin/objdump -d`, available directly on R36H) before finalizing binary patches. This prevents subtle SIMD bitfield errors (e.g., `ld4`/`st4` element size `.16b` vs `.8h` or `mov v0.d[1], v1.d[0]` vs `d[0]`).
 
 > [!IMPORTANT] Operational Rule: Synchronous Execution Only (No Background Tasks)
 > **Never run commands as background tasks (`run_command` with low wait time or async).** Always execute commands synchronously to completion (`WaitMsBeforeAsync` at maximum e.g. 10000ms, or wait until finished). Do not delegate or background long-running processes that require follow-up, as context switching risks forgetting the active lifecycle or delaying subsequent workflow steps.
@@ -31,6 +43,18 @@ This document serves as the authoritative operational and development reference 
 > 6. **Dual-Target Ports Support & Side-by-Side Packaging**:
 >    - Primary target is `/roms/ports/` (enabled by default on playOS, dArkOS, and ArkOS).
 >    - The user-facing launcher must sit side-by-side with its internal subfolder and pre-packaged `images/` directory.
+> 7. **R36H Hardware Button Indices (`GO-Super Gamepad` / Evdev)**:
+>    - On R36H (HL-R36H-V20 / RK3326 `odroidgo3-joypad`), Linux kernel evdev assigns button indices in ascending order of keycode:
+>      - `b0` = **B** (Bottom) — `BTN_SOUTH` (304)
+>      - `b1` = **A** (Right) — `BTN_EAST` (305)
+>      - `b2` = **X** (Top) — `BTN_NORTH` (307)
+>      - `b3` = **Y** (Left) — `BTN_WEST` (308)
+>    - **Crucial Invariant:** `BTN_NORTH (307)` precedes `BTN_WEST (308)`. Therefore, Top (X) is `b2`, and Left (Y) is `b3`. Never invert them as `X=b3, Y=b2`, which causes physical button Y to change camera and physical X to brake.
+> 8. **Orphan `gptokeyb` & Double-Input Prevention**:
+>    - Running multiple instances of `gptokeyb` simultaneously creates multiple `Fake Keyboard` uinput devices in the kernel, causing every D-pad or button press to emit duplicate events (skipping 2 items in `dialog` menus, e.g. 1 -> 3).
+>    - Never rely solely on `pkill -9 -f "gptokeyb.*$SCRIPT_NAME"` (which fails if `$SCRIPT_NAME` was `bash`).
+>    - Always execute unconditional `killall -9 gptokeyb 2>/dev/null || true` and `pkill -9 -f "gptokeyb" 2>/dev/null || true` both on startup and in `cleanup()`.
+>    - Always pin `gptokeyb` to the explicit script basename (e.g. `TARGET_NAME="$SCRIPT_NAME"`, falling back to the fixed `.sh` name if `$SCRIPT_NAME` is `bash` or `sh`).
 
 ---
 
@@ -111,8 +135,8 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 | :--- | :--- | :--- | :--- | :--- |
 | **v10** | US Retail v1.0 (No-CD) | `4,788,224` | `95b4dc3e9a6c72b06a8bd62b0c56ea63` | `nfsu2.aarch64.v10` |
 | **v10-thai** | US Retail v1.0 (Thai Patched via `patch_thai.py` v1) | `4,788,224` | `039b5bbe8aecc1c57474ef026a5bb4a7` | `nfsu2.aarch64.v10` |
-| **v10-thai-sub**| US Retail v1.0 (Thai + Subtitles via `patch_thai.py`) | `4,788,224` | `7cbec03689721645a5456bc0292ef1bf` | `nfsu2.aarch64.v10` (patched) |
-| **v12** | European Retail v1.2 (No-CD) | `4,800,512` | `6445adbf4e8d64be51e96a69bba168a4` | `nfsu2.aarch64.v12` |
+| **v10-thai-sub**| US Retail v1.0 (Thai + Subtitles via `patch_thai.py`) | `4,788,224` | `7cbec03689721645a5456bc0292ef1bf` | `nfsu2.aarch64.v10` (`ceb3ba53a8bc29583e72a42765922ce3` with `patch_video.py`) |
+| **v12** | European Retail v1.2 (No-CD) | `4,800,512` | `6445adbf4e8d64be51e96a69bba168a4` | `nfsu2.aarch64.v12` (`56f06a62233dbe68dc23d6fd0ca7cd87` with `patch_video.py`) |
 
 ### Incompatible Executables
 * **Retail SafeDisc / SecuROM protected exes**:
@@ -152,6 +176,10 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
        * `0x24228` (`0x818f0385`): `"ถข น\0"` -> `"NAME\0"` (5 bytes)
        * `0x24158` (`0x3de4eff0`): Title -> `"Create Name\0\0\0\0\0"` (16 bytes)
        * File size remains exactly `264,184` bytes. Resolves virtual keyboard crash (`PC_NAME_ENTRY`) on PortMaster vkbd.
+    4. **`patch_gps.py`** (Targets `nfsu2.aarch64` / `v10` / `v12`):
+       * Patches `selectSend(bool)` in Menu Mode (`guestDrivingControls() == false`):
+       * Button X (Top / North, `[x2, #42]`): Remapped from `DIK_SPACE` (`sp + 65`) to `DIK_C` (`sp + 54`, `0x2E` = 46). Enables instant Joypad GPS activation on the World Map matching authentic PS2 Triangle behavior without requiring on-screen virtual keyboard.
+       * Button Y (Left / West, `[x2, #43]`): Remapped from redundant `DIK_ESCAPE` (`sp + 9`) to `DIK_SPACE` (`sp + 65`, `0x39` = 57). Restores Space key for World Map icon filtering and garage options.
   * Set `NFSU2_LANG=Thai` in `nfsu2/nfsu2.cfg` (or `NFSU2_LANG=English` to switch back to English at any time).
 
 ---
@@ -171,43 +199,69 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 ```text
 ./
 ├── AGENTS.md                            <- Master operational guide & rules
-├── KNOWLEDGE.md                         <- Deep reverse-engineering knowledge base
+├── KNOWLEDGE.md                         <- Localization, Thai fonts & subtitles knowledge base
+├── KNOWLEDGE_VIDEO.md                   <- Cutscene/FMV video performance & NEON patch knowledge base
+├── KNOWLEDGE_INPUT.md                   <- Gamepad input architecture, inlining invariants & GPS patch
+├── PLAN_PR_VIDEO_PERF.md                <- PR #1 plan: Video performance C/C++ fixes & R36H build guide
+├── PLAN_PR_THAI_SUBTITLES.md            <- PR #2 plan: Native Thai localization & subtitles C/C++ fixes
+├── PLAN_PR_JOYPAD_GPS.md                <- PR #3 plan: Joypad GPS & Space DirectInput C/C++ fixes
 ├── patch_thai.py                        <- Modular patcher for SPEED2.EXE
 ├── patch_subtitles.py                   <- Modular patcher for nfsu2.aarch64
+├── patch_video.py                       <- Modular cutscene/FMV video performance patcher for nfsu2.aarch64
 ├── patch_thailand_bin.py                <- Modular patcher for Thailand.bin
+├── patch_gps.py                         <- Modular patcher for Joypad GPS & Space
 ├── build_copypaste_pack.py / .ps1       <- Standalone drop-in copy-paste pack builder
 ├── build_tools_pack.py / .ps1           <- playOS TOOLS distribution pack builder
+├── build_reset_controls_pack.py         <- Save controls reset pack builder
+├── build_controls_pack.py               <- Gamepad controls remapper pack builder
 ├── NFSU2-thumb.png                      <- Game cover art (512x512)
 ├── ports/                               <- Mirrored /roms/ports/ tree
 │   ├── NFSU2.sh                         <- Master launcher script
 │   └── nfsu2/                           <- Recompiled engine, assets, and configs
 ├── tools/                               <- Project-local tools workspace (Self-contained)
-│   └── nfsu2_thai/                      <- Source tools suite (installer, switchers, assets)
+│   ├── nfsu2_thai/                      <- Source tools suite (installer, switchers, assets)
+│   ├── nfsu2_reset_controls/            <- Save controls reset tool
+│   └── nfsu2_controls/                  <- Gamepad controls remapper & presets tool
 ├── nfsu2_thai/                          <- Drop-in Thai assets & save games
 └── dist/                                <- Packaged zip distributions (copy-paste & tools)
 ```
 
-### Local Tools Package Layout (`./tools/nfsu2_thai/`)
+### Local Tools Package Layout (`./tools/`)
 ```text
-./tools/nfsu2_thai/
-├── NFSU2_Thai.sh                        <- Master Smart TUI Manager (Install, Language, Fast Boot, Uninstall)
-├── images/                              <- Cover art & thumbnails (512x512)
-├── gamedata/                            <- Retail game data patch assets
-│   ├── SPEED2.EXE                       <- Patched v1.0 No-CD executable (4,788,224 bytes)
-│   └── LANGUAGES/
-│       ├── LanguageTextures.bin         <- HD Thai font textures (1,286,144 bytes)
-│       └── Thailand.bin                 <- Patched Thai localization strings & fonts (264,184 bytes)
-└── app/                                 <- Engine binaries and standalone CLI tool fallbacks
-    ├── fb0_mirror                       <- KMSDRM framebuffer mirror & dynamic OS gamepad bridge
-    ├── fb0_mirror.c                     <- Source code for fb0_mirror
-    ├── Install_NFSU2_Thai.sh            <- Standalone CLI installer
-    ├── Uninstall_NFSU2_Thai.sh          <- Standalone CLI uninstaller
-    ├── NFSU2_Language_Thai.sh           <- Standalone CLI language switcher: Thai
-    ├── NFSU2_Language_English.sh        <- Standalone CLI language switcher: English
-    ├── NFSU2_Intro_Skip.sh              <- Standalone CLI fast boot switcher
-    ├── NFSU2_Intro_Restore.sh           <- Standalone CLI intro restore switcher
-    ├── generate_icons.py                <- Thumbnail generator script
-    └── images/                          <- 512x512 launcher thumbnails
+./tools/
+├── README.txt                           <- Central tools documentation
+├── nfsu2_thai/                          <- NFSU2 Thai Edition Manager (PortMaster Flat)
+│   ├── NFSU2_Thai.sh                    <- Master Smart TUI Manager (Install, Language, Fast Boot, Uninstall)
+│   ├── README.txt                       <- User guide
+│   ├── images/
+│   │   └── NFSU2_Thai-thumb.png         <- 512x512 Minimalist (#121212) Cover Art
+│   └── nfsu2thai/                       <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
+│       ├── README.txt
+│       ├── gamedata/                    <- Retail game data patch assets
+│       │   ├── SPEED2.EXE               <- Patched v1.0 No-CD executable (4,788,224 bytes)
+│       │   └── LANGUAGES/
+│       │       ├── LanguageTextures.bin <- HD Thai font textures (1,286,144 bytes)
+│       │       └── Thailand.bin         <- Patched Thai localization strings & fonts (264,184 bytes)
+│       └── images/
+│           └── NFSU2_Thai-thumb.png
+└── nfsu2_reset_controls/                <- NFSU2 Save Controls Reset Tool (PortMaster Flat)
+    ├── NFSU2_Reset_Controls.sh          <- Master Save Controls Reset & Backup/Restore TUI
+    ├── README.txt                       <- User guide
+    ├── images/
+    │   └── NFSU2_Reset_Controls-thumb.png <- 512x512 Minimalist (#121212) Cover Art
+    └── nfsu2resetcontrols/              <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
+        ├── README.txt
+        └── images/
+            └── NFSU2_Reset_Controls-thumb.png
+└── nfsu2_controls/                      <- NFSU2 Controls Manager (PortMaster Flat)
+    ├── NFSU2_Controls.sh                <- Master Gamepad Remapper & Presets TUI
+    ├── README.txt                       <- User guide
+    ├── images/
+    │   └── NFSU2_Controls-thumb.png     <- 512x512 Minimalist (#121212) Cover Art
+    └── nfsu2controls/                   <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
+        ├── README.txt
+        └── images/
+            └── NFSU2_Controls-thumb.png
 ```
 
 ### Target Device Layout (`/roms/ports/` & `/roms/tools/`)
@@ -242,12 +296,19 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
         ├── MOVIES/                      <- Cutscenes and video files
         └── LANGUAGES/                   <- English.bin, Thailand.bin, etc.
 
-/roms/tools/
-└── nfsu2_thai/                          <- Self-contained Thai Manager tools package (No clutter in /roms/tools/)
-    ├── NFSU2_Thai.sh                    <- Master TUI launcher (chmod 755)
-    ├── gamedata/                        <- Thai localization data assets
-    ├── images/                          <- Cover art & thumbnails
-    └── app/                             <- Engine binaries (fb0_mirror) and standalone CLI tools
+/roms/ports/ (or /roms/tools/)
+├── NFSU2_Thai.sh                        <- Master Thai TUI launcher (chmod 755)
+├── NFSU2_Reset_Controls.sh              <- Master Controls Reset & Backup/Restore TUI (chmod 755)
+├── images/
+│   ├── NFSU2_Thai-thumb.png             <- 512x512 Minimalist Cover Art
+│   └── NFSU2_Reset_Controls-thumb.png   <- 512x512 Minimalist Cover Art
+├── nfsu2thai/                           <- Flat lowercase Thai data folder (Auto-Hidden)
+│   ├── gamedata/
+│   │   ├── SPEED2.EXE
+│   │   └── LANGUAGES/
+│   └── images/
+└── nfsu2resetcontrols/                  <- Flat lowercase Controls data folder (Auto-Hidden)
+    └── images/
 ```
 
 ---
@@ -500,4 +561,15 @@ grep -q "NFSU2_LANG=English" /roms/ports/nfsu2/nfsu2.cfg && echo "Config English
 echo "=== 7. RE-INSTALL FOR USER ==="
 sudo bash /roms/tools/nfsu2_thai/Install_NFSU2_Thai.sh
 echo "=== FULL LIFECYCLE TEST PASSED ==="
+```
+
+---
+
+## 12. TODO & Upstream Pull Request Roadmap
+
+- [ ] **PR #1 — Cutscene / FMV Video Performance Optimization ([`PLAN_PR_VIDEO_PERF.md`](./PLAN_PR_VIDEO_PERF.md))**:
+  - Apply C/C++ source changes in `d3d9_render_thread.inc`, `d3d9_gles_resources.h`, `overrides.c`, and `config/exe_functions.txt`.
+  - Build and verify native ARM64 binaries (`nfsu2.aarch64.v10` / `v12`) directly on the R36H (`playOS`) using the Fast Runtime Build (~15s) or Full Lift & Build workflow in **[`PLAN_PR_VIDEO_PERF.md`](./PLAN_PR_VIDEO_PERF.md)**.
+- [ ] **PR #2 — Native Thai Localization & Universal Subtitles Support ([`PLAN_PR_THAI_SUBTITLES.md`](./PLAN_PR_THAI_SUBTITLES.md))**:
+  - Apply in-memory runtime language descriptor initialization in `guest_runtime.cpp` and subtitle overrides (`sub_0050CEF0`, `sub_005535F0`) in `overrides.c` as detailed in **[`PLAN_PR_THAI_SUBTITLES.md`](./PLAN_PR_THAI_SUBTITLES.md)**.
 ```

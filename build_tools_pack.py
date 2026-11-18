@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build playOS TOOLS distribution package (nfsu2_thai.zip) from project-local tools directory.
+Build playOS & PortMaster TOOLS distribution package (nfsu2_thai.zip) from project-local tools directory.
 Supports both Windows and Linux / WSL environments.
 """
 
@@ -67,42 +67,15 @@ def build_tools_package(output_zip: Path = None):
     if tools_readme.exists():
         shutil.copy2(tools_readme, stage_dir / "README.txt")
 
-    # Ensure no README.txt inside nfsu2_thai/ folder
+    # Ensure no README.txt inside stage_pkg root (subfolder nfsu2thai/README.txt is fine)
     pkg_readme = stage_pkg / "README.txt"
     if pkg_readme.exists():
         pkg_readme.unlink()
 
-    # playOS Anti-Clutter Invariant: Exclude non-essential .sh and companion files
-    # playfe scans subdirectories recursively; only keep the essential NFSU2_Thai.sh
+    # Ensure no app/ directory exists (Anti-clutter / PortMaster flat invariant)
     app_dir = stage_pkg / "app"
     if app_dir.exists():
-        # Exclude auxiliary CLI scripts
-        for sh_file in app_dir.glob("*.sh"):
-            sh_file.unlink()
-            print(f"  [Exclude] Removed {sh_file.name} from package")
-        # Exclude dev script, C source, and app/images
-        for dev_file in ["generate_icons.py", "fb0_mirror.c"]:
-            f = app_dir / dev_file
-            if f.exists():
-                f.unlink()
-        app_img = app_dir / "images"
-        if app_img.exists():
-            shutil.rmtree(app_img)
-
-    # Exclude unused thumbnails in nfsu2_thai/images/ (keep only NFSU2-image.png and NFSU2-thumb.png)
-    pkg_img_dir = stage_pkg / "images"
-    if pkg_img_dir.exists():
-        unused_thumbs = [
-            "NFSU2_Intro_Restore-thumb.png",
-            "NFSU2_Intro_Skip-thumb.png",
-            "NFSU2_Language_English-thumb.png",
-            "NFSU2_Language_Thai-thumb.png",
-            "Uninstall_NFSU2_Thai-thumb.png",
-        ]
-        for thumb in unused_thumbs:
-            thumb_path = pkg_img_dir / thumb
-            if thumb_path.exists():
-                thumb_path.unlink()
+        shutil.rmtree(app_dir)
 
     print(f"\n[2/3] Compressing package into {output_zip.name}...")
     if output_zip.exists():
