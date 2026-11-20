@@ -1,11 +1,22 @@
 ==============================================================================
-NFSU2 Thai Manager — All-in-One Smart TUI for R36H / R36S (playOS / ArkOS)
+NFSU2 Thai & Controls Manager — All-in-One Suite for R36H / R36S (playOS / ArkOS)
 ==============================================================================
 
-เครื่องมือติดตั้งและจัดการภาษาไทยสำหรับ Need for Speed: Underground 2 บนเครื่อง R36H / R36S
-รองรับทั้งภาษาไทย ซับไตเติลภาษาไทย และระบบ Fast Boot (ข้ามอินโทร เข้าเกมเร็วใน 1 วินาที)
+ชุดเครื่องมือจัดการภาษาไทยและปุ่มจอยสำหรับ Need for Speed: Underground 2 บนเครื่อง R36H / R36S
+ประกอบด้วย 2 โปรแกรมหลัก:
+  1. NFSU2_Thai.sh     — ติดตั้ง/สลับภาษาไทย ซับไตเติล และ Fast Boot
+  2. NFSU2_Controls.sh — ตั้งค่าปุ่มจอย (Presets / Custom) และรีเซ็ตปุ่มในเซฟ
 
-คุณสมบัติหลัก (All-in-One TUI):
+Patch Note v1.1 (NFSU2_Thai.sh):
+------------------------------------------------------------------------------
+- แก้ไขข้อความภาษาไทยบนหน้าจอขณะแข่ง (HUD) ที่ไม่แสดงผล เช่น ลำดับ, จำนวนรอบ,
+  โหมด Drag, ข้อความตอนเปลี่ยนเกียร์ และข้อความตอนแข่งจบ ให้แสดงภาษาไทยครบทุกโหมด
+- แก้ไขสระอิหายในคำว่า "เงิน:" และข้อความภาษาไทยขนาดเล็กบนหน้าจอให้แสดงผลชัดเจน
+- เพิ่มการรองรับปุ่มจอย (ปุ่ม X) เปิดใช้งาน GPS นำทางบนแผนที่ (World Map) ได้ทันที
+  และคืนค่าปุ่ม Y สำหรับตัวกรองไอคอนบนแผนที่
+- ปรับปรุงความลื่นไหลของวิดีโอคัตซีนและอินโทรในเกม แก้อาการกระตุก
+
+คุณสมบัติหลัก (NFSU2_Thai.sh):
 ------------------------------------------------------------------------------
 1. ติดตั้ง / ถอนการติดตั้งภาษาไทย (Install / Uninstall NFSU2 Thai):
    - แพตช์ SPEED2.EXE และ engine binary ปลดล็อกฟอนต์ภาษาไทยและซับไตเติล
@@ -16,6 +27,19 @@ NFSU2 Thai Manager — All-in-One Smart TUI for R36H / R36S (playOS / ArkOS)
    - สลับระหว่างภาษาไทย (พร้อมซับไตเติล) กับภาษาอังกฤษดั้งเดิมได้ตลอดเวลา
 3. ควบคุมวิดีโออินโทร (Skip <-> Restore Intro Movies):
    - เปิดหรือปิด Fast Boot ได้อย่างอิสระโดยไม่ต้องลงเกมใหม่
+
+คุณสมบัติหลัก (NFSU2_Controls.sh):
+------------------------------------------------------------------------------
+1. Quick Presets:
+   - PS2 Classic: ปุ่มสไตล์ PS2 สำหรับ R36H (B=เร่ง, Y=เบรก, A=เบรกมือ, X=มุมกล้อง/GPS)
+   - Modern Trigger: เร่งด้วย R2, เบรกด้วย L2, เบรกมือ A, ไนตรัส R1
+2. Full Custom Remapper:
+   - ปรับแต่งปุ่มขับรถได้อิสระ 9 ฟังก์ชัน (Throttle, Brake, E-Brake, Nitrous,
+     Shift Up/Down, Look Back, Camera, Reset Car)
+3. Reset Controls (Config & Save):
+   - Reset -> Config: ล้าง controls.cfg และค่า SDL_GAMECONTROLLERCONFIG ใน nfsu2.cfg
+   - Reset -> Save  : รีเซ็ตการตั้งค่าปุ่มในเซฟเกม (0xD278..0xD6B6) พร้อมคำนวณ CRC32
+                      ใหม่ โดยรักษาความคืบหน้า รถ และเงินในเซฟไว้ครบ 100%
 
 มาตรฐาน PortMaster & playOS (Zero fb0_mirror, Flat Side-by-Side):
 ------------------------------------------------------------------------------
@@ -29,7 +53,9 @@ NFSU2 Thai Manager — All-in-One Smart TUI for R36H / R36S (playOS / ArkOS)
 [วิธีที่ 1 - แนะนำ] ติดตั้งใน Ports (/roms/ports/):
   คัดลอกไฟล์ต่อไปนี้ไปไว้ที่ /roms/ports/
     - NFSU2_Thai.sh
+    - NFSU2_Controls.sh
     - images/NFSU2_Thai-thumb.png
+    - images/NFSU2_Controls-thumb.png
     - โฟลเดอร์ nfsu2thai/
 
 [วิธีที่ 2] ติดตั้งใน Tools (/roms/tools/):

@@ -20,11 +20,15 @@ sys.path.insert(0, str(SCRIPT_DIR))
 try:
     from patch_thai import patch_exe
     from patch_subtitles import patch_arm64_binary
+    from patch_video import patch_arm64_binary as patch_video_binary
+    from patch_gps import patch_file as patch_gps_binary
     from patch_thailand_bin import patch_thailand_bin
 except ImportError as e:
     print(f"[WARN] Sibling patch modules could not be imported: {e}", file=sys.stderr)
     patch_exe = None
     patch_arm64_binary = None
+    patch_video_binary = None
+    patch_gps_binary = None
     patch_thailand_bin = None
 
 
@@ -47,8 +51,17 @@ def normalize_path(p) -> Path:
 
 
 README_CONTENT = """==============================================================================
-Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack (R36H / R36S)
+Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack v1.1 (R36H / R36S)
 ==============================================================================
+
+Patch Note v1.1:
+------------------------------------------------------------------------------
+- แก้ไขข้อความภาษาไทยบนหน้าจอขณะแข่ง (HUD) ที่ไม่แสดงผล เช่น ลำดับ, จำนวนรอบ,
+  โหมด Drag, ข้อความตอนเปลี่ยนเกียร์ และข้อความตอนแข่งจบ ให้แสดงภาษาไทยครบทุกโหมด
+- แก้ไขสระอิหายในคำว่า "เงิน:" และข้อความภาษาไทยขนาดเล็กบนหน้าจอให้แสดงผลชัดเจน
+- เพิ่มการรองรับปุ่มจอย (ปุ่ม X) เปิดใช้งาน GPS นำทางบนแผนที่ (World Map) ได้ทันที
+  และคืนค่าปุ่ม Y สำหรับตัวกรองไอคอนบนแผนที่
+- ปรับปรุงความลื่นไหลของวิดีโอคัตซีนและอินโทรในเกม แก้อาการกระตุก
 
 ชุดแพตช์ภาษาไทย + ปลดล็อกคำบรรยายซับไตเติล (สำหรับ Copy-Paste วางทับได้ทันที):
 - NFSU2.sh:
@@ -72,9 +85,9 @@ Need for Speed: Underground 2 — Thai + Subtitles Drop-in Pack (R36H / R36S)
 
 วิธีติดตั้งง่ายๆ (Copy-Paste):
 ------------------------------------------------------------------------------
-1. นำไฟล์และโฟลเดอร์ทั้งหมด (NFSU2.sh, nfsu2, images) ไปวางทับในเครื่องเกมที่:
+1. นำโฟลเดอร์ nfsu2 และ images ไปวางทับในเครื่องเกมที่:
    /roms/ports/
-   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลาก NFSU2.sh, โฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports ตอบ Replace All เพื่อวางทับไฟล์เดิม)
+   (หรือเปิด MicroSD Card ในคอมพิวเตอร์ แล้วลากโฟลเดอร์ nfsu2 และ images ไปวางในโฟลเดอร์ ports ตอบ Replace All เพื่อวางทับไฟล์เดิม)
    * ไม่ต้องทับไฟล์ gamelist.xml เพื่อป้องกันรายชื่อเกมเดิมสูญหาย
 2. เข้าเล่นเกมผ่านเมนู PORTS -> NFSU2 ได้ทันที ภาษาไทยและซับไตเติลจะทำงานอัตโนมัติ!
 ==============================================================================
@@ -103,10 +116,6 @@ def build_package(output_zip: Path = None):
     print("==================================================================")
 
     # 1. Locate Source Assets
-    launcher_src = find_source_file([
-        SCRIPT_DIR / "ports" / "NFSU2.sh",
-        SCRIPT_DIR / "NFSU2.sh",
-    ])
     cfg_src = find_source_file([
         SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.cfg",
         SCRIPT_DIR / "nfsu2.cfg",
@@ -117,23 +126,25 @@ def build_package(output_zip: Path = None):
         SCRIPT_DIR / "ports" / "nfsu2" / "nfsu2.aarch64",
     ])
     exe_src = find_source_file([
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "nfsu2thai" / "gamedata" / "SPEED2.EXE",
         SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "SPEED2.EXE",
         SCRIPT_DIR / "nfsu2_thai" / "SPEED2.EXE",
         SCRIPT_DIR / "ports" / "nfsu2" / "gamedata" / "SPEED2.EXE",
     ])
     thai_bin_src = find_source_file([
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "nfsu2thai" / "gamedata" / "LANGUAGES" / "Thailand.bin",
         SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "LANGUAGES" / "Thailand.bin",
         SCRIPT_DIR / "nfsu2_thai" / "LANGUAGES" / "Thailand.bin",
         SCRIPT_DIR / "ports" / "nfsu2" / "gamedata" / "LANGUAGES" / "Thailand.bin",
     ])
     lang_tex_src = find_source_file([
+        SCRIPT_DIR / "tools" / "nfsu2_thai" / "nfsu2thai" / "gamedata" / "LANGUAGES" / "LanguageTextures.bin",
         SCRIPT_DIR / "tools" / "nfsu2_thai" / "gamedata" / "LANGUAGES" / "LanguageTextures.bin",
         SCRIPT_DIR / "ports" / "nfsu2" / "gamedata" / "LANGUAGES" / "LanguageTextures.bin",
         SCRIPT_DIR / "game" / "v1" / "LANGUAGES" / "LanguageTextures.bin",
     ])
 
     missing = []
-    if not launcher_src: missing.append("NFSU2.sh")
     if not cfg_src: missing.append("nfsu2.cfg")
     if not arm64_v10_src: missing.append("nfsu2.aarch64.v10")
     if not exe_src: missing.append("SPEED2.EXE")
@@ -152,10 +163,6 @@ def build_package(output_zip: Path = None):
     stage_lang.mkdir(parents=True, exist_ok=True)
 
     print(f"\n[1/4] Copying files to staging directory...")
-    # Master Launcher (NFSU2.sh) at root of ports
-    target_launcher = stage_dir / "NFSU2.sh"
-    launcher_bytes = launcher_src.read_bytes().replace(b"\r\n", b"\n")
-    target_launcher.write_bytes(launcher_bytes)
 
     # Runtime Configuration (nfsu2/nfsu2.cfg)
     target_cfg = stage_nfsu2 / "nfsu2.cfg"
@@ -207,6 +214,12 @@ def build_package(output_zip: Path = None):
     if patch_arm64_binary:
         patch_arm64_binary(target_arm64)
         patch_arm64_binary(target_arm64_v10)
+    if patch_video_binary:
+        patch_video_binary(target_arm64)
+        patch_video_binary(target_arm64_v10)
+    if patch_gps_binary:
+        patch_gps_binary(str(target_arm64))
+        patch_gps_binary(str(target_arm64_v10))
     if patch_exe:
         patch_exe(target_exe, target_exe)
         patch_exe(target_exe_lower, target_exe_lower)

@@ -67,7 +67,8 @@ export MALLOC_CHECK_=0
 
 # Clocks: CPU, GPU (Mali) and memory controller (DMC) at their top step while the game runs. The RK3326
 # devfreq governors otherwise keep the GPU and DRAM clocks low, and this game is bound by CPU and memory.
-# The previous governors are restored on exit.
+# Also pause non-essential background services (smbd, nmbd, filebrowser; SSH is always kept alive) and
+# lower vm.swappiness to prevent SD card swap stutters. Previous state is restored cleanly on exit.
 SUDO="${ESUDO:-sudo}"
 CLOCK_STATE=""
 for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor \
@@ -76,12 +77,42 @@ for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices
   old=$(cat "$gov" 2>/dev/null)
   echo performance | $SUDO tee "$gov" > /dev/null 2>&1 && CLOCK_STATE="$CLOCK_STATE $gov=$old"
 done
-restore_clocks() {
+
+OLD_SWAPPINESS=""
+if [ -f /proc/sys/vm/swappiness ]; then
+  OLD_SWAPPINESS=$(cat /proc/sys/vm/swappiness 2>/dev/null)
+  echo 10 | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
+fi
+
+PAUSED_SERVICES=""
+for svc in smbd nmbd; do
+  if systemctl is-active --quiet "$svc" 2>/dev/null; then
+    $SUDO systemctl stop "$svc" > /dev/null 2>&1 && PAUSED_SERVICES="$PAUSED_SERVICES $svc"
+  fi
+done
+
+FILEBROWSER_CMD=""
+FB_PID=$(pgrep -x filebrowser 2>/dev/null | head -n1)
+if [ -n "$FB_PID" ] && [ -r "/proc/$FB_PID/cmdline" ]; then
+  FILEBROWSER_CMD=$(tr '\0' ' ' < "/proc/$FB_PID/cmdline" 2>/dev/null)
+  $SUDO kill "$FB_PID" > /dev/null 2>&1 || true
+fi
+
+restore_system() {
   for entry in $CLOCK_STATE; do
     echo "${entry#*=}" | $SUDO tee "${entry%%=*}" > /dev/null 2>&1 || true
   done
+  if [ -n "$OLD_SWAPPINESS" ]; then
+    echo "$OLD_SWAPPINESS" | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
+  fi
+  for svc in $PAUSED_SERVICES; do
+    $SUDO systemctl start "$svc" > /dev/null 2>&1 &
+  done
+  if [ -n "$FILEBROWSER_CMD" ]; then
+    nohup $FILEBROWSER_CMD >/dev/null 2>&1 &
+  fi
 }
-trap restore_clocks EXIT
+trap restore_system EXIT
 
 # R36S 1GB RAM Protection:
 # Free reclaimable page caches to maximize contiguous memory before launching
@@ -159,13 +190,13 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 # These feed the game's OWN PC graphics options (the registry values its Options
 # menu writes), so the game renders exactly as it would on PC with those settings.
 # Override in "$GAMEDIR/nfsu2.cfg", e.g.:
-#   NFSU2_GRAPHICS=quality      # performance | balanced | quality
+#   NFSU2_GRAPHICS=ultra_performance  # ultra_performance | performance | balanced | quality
 #   NFSU2_FPS=30                # 30 or 60
 #   NFSU2_REGISTRY_EXTRA="g_CrowdEnable=0"   # any extra g_* option
 #   NFSU2_GPU_EXTRAS=1          # test: options that cost GPU time but no CPU time (trilinear texture
 #                               # filtering, colour tinting, detailed car models) on top of the profile
 #   NFSU2_GPU_EXTRAS=ab         # alternate off/on at every launch (to compare two sessions' logs)
-#   NFSU2_DRAW_DIST=200         # metres; scenery wholly beyond it is not drawn and the fog reaches
+#   NFSU2_DRAW_DIST=120         # metres; scenery wholly beyond it is not drawn and the fog reaches
 #                               # opaque at that distance, so nothing visibly pops (0 = the game's own)
 # Display (the game adapts to the handheld's own screen; nothing to set on a 640x480 R36S):
 #   NFSU2_ASPECT=auto           # auto: widescreen on 16:9 etc. panels, 4:3 with bars on narrower ones
@@ -175,15 +206,32 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_SCREEN=854x480        # only if the panel size is detected wrongly
 #   NFSU2_ROTATE=90             # panel mounted rotated (90 or 270; portrait panels default to 90)
 #   NFSU2_SHOW_FPS=1            # frame counter on from the start (Select + R3 toggles it in game)
+# Engine Performance Tuning (defaults eliminate periodic glFinish stalls and enable triple buffering):
+#   NFSU2_GPU_PROBE=0           # 0 disables 8-frame glFinish() probe stall every 240 frames
+#   NFSU2_GPU_LOAD=0            # 0 disables per-frame sysfs GPU utilisation reads
+#   NFSU2_PRESENT_SLOTS=3       # 3 = triple-buffered presenter thread (2 = double-buffered)
 # ---------------------------------------------------------------------------
-NFSU2_GRAPHICS=performance
+NFSU2_GRAPHICS=ultra_performance
 NFSU2_FPS=30
 NFSU2_REGISTRY_EXTRA=""
 NFSU2_GPU_EXTRAS=0
-NFSU2_DRAW_DIST=200
+NFSU2_DRAW_DIST=""
+NFSU2_RENDER_SCALE=""
 NFSU2_LANG=Thai
+NFSU2_GPU_PROBE=0
+NFSU2_GPU_LOAD=0
+NFSU2_PRESENT_SLOTS=3
 [ -f "$GAMEDIR/nfsu2.cfg" ] && . "$GAMEDIR/nfsu2.cfg"
-export NFSU2_DRAW_DIST NFSU2_LANG
+
+# Apply smart per-profile defaults if not explicitly overridden in nfsu2.cfg
+if [ "$NFSU2_GRAPHICS" = "ultra_performance" ]; then
+  [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=120
+  [ -z "$NFSU2_RENDER_SCALE" ] && NFSU2_RENDER_SCALE=0.75
+else
+  [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
+fi
+
+export NFSU2_DRAW_DIST NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS
 for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS; do
   eval "[ -n \"\${$v:-}\" ] && export $v"
 done
@@ -193,6 +241,8 @@ export NFSU2_WIDESCREEN_DAT="$GAMEDIR/widescreen/NFSUnderground2.WidescreenFix.d
 
 COMMON="NotFirstTime=1;g_MotionBlurEnable=0;g_LightStreaksEnable=0;g_DepthOfFieldEnable=0;g_OverBrightEnable=0;g_BleachByPassEnable=0;g_FSAALevel=0;g_RainEnable=0;g_RacingResolution=0;g_VSyncOn=0;g_CarDamageEnable=0"
 case "$NFSU2_GRAPHICS" in
+  ultra_performance)
+    PROFILE="g_PerformanceLevel=0;g_TextureFiltering=0;g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0;g_CarShadowEnable=0;g_CarHeadlightEnable=0;g_CarLightingEnable=0;g_CrowdEnable=0;g_RoadReflectionEnable=0;g_FogEnable=1;g_HorizonFogEnable=1;g_LightGlowEnable=0;g_AnimatedTextureEnable=0;g_ParticleSystemEnable=0;g_WorldLodLevel=0;g_CarLodLevel=0;g_TintingEnable=0" ;;
   performance)
     PROFILE="g_PerformanceLevel=1;g_TextureFiltering=1;g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0;g_CarShadowEnable=1;g_CarHeadlightEnable=1;g_CarLightingEnable=1;g_CrowdEnable=0;g_RoadReflectionEnable=0;g_FogEnable=1;g_HorizonFogEnable=1;g_LightGlowEnable=0;g_AnimatedTextureEnable=1;g_ParticleSystemEnable=0;g_WorldLodLevel=0;g_CarLodLevel=0;g_TintingEnable=0" ;;
   quality)
@@ -211,7 +261,8 @@ CAP_ARG="--cap60"; [ "$NFSU2_FPS" = "30" ] && CAP_ARG="--cap30"
 
 # Record the clocks actually in effect (launcher.log next to log.txt)
 {
-  echo "[launcher] graphics=$NFSU2_GRAPHICS gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS"
+  echo "[launcher] graphics=$NFSU2_GRAPHICS draw_dist=$NFSU2_DRAW_DIST render_scale=${NFSU2_RENDER_SCALE:-1.0} gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS probe=$NFSU2_GPU_PROBE slots=$NFSU2_PRESENT_SLOTS"
+  echo "[launcher] paused_services=${PAUSED_SERVICES:-none} paused_filebrowser=${FILEBROWSER_CMD:+yes} swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
   # What this kernel offers for GPU load (read by the binary for its [NFSU2 GPU] log line)
   for d in /sys/class/devfreq/*; do [ -d "$d" ] && echo "[launcher] devfreq $d: $(ls "$d" 2>/dev/null | tr '\n' ' ')"; done
   for f in /sys/devices/platform/*gpu*/utilisation /sys/class/misc/mali0/device/utilisation; do
@@ -232,9 +283,11 @@ CAP_ARG="--cap60"; [ "$NFSU2_FPS" = "30" ] && CAP_ARG="--cap30"
 # Keep the previous run's log (a crash on one run is otherwise overwritten by the next launch)
 [ -f "$GAMEDIR/log.txt" ] && mv -f "$GAMEDIR/log.txt" "$GAMEDIR/log.prev.txt"
 
-# Launch game: GLES 2.0 at the screen's native resolution (see Display above)
+# Launch game with elevated CPU & I/O priority (inherited by child without losing env or user ownership)
 LANG_ARG="--lang=$NFSU2_LANG"
 echo "[NFSU2] running $BIN" > "$GAMEDIR/log.txt"
+$SUDO renice -n -10 -p $$ >/dev/null 2>&1 || true
+command -v ionice >/dev/null 2>&1 && $SUDO ionice -c 2 -n 0 -p $$ >/dev/null 2>&1 || true
 "./$BIN" "$GAMEDIR/gamedata" $CAP_ARG $LANG_ARG >> "$GAMEDIR/log.txt" 2>&1
 EXIT_CODE=$?
 

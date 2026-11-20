@@ -58,22 +58,16 @@ def build_tools_package(output_zip: Path = None):
     stage_dir.mkdir(parents=True, exist_ok=True)
 
     print("\n[1/3] Staging tools package layout...")
-    # Package folder: _stage_tools/nfsu2_thai/...
-    stage_pkg = stage_dir / "nfsu2_thai"
-    shutil.copytree(src_tools, stage_pkg)
+    # Flat root layout: place package contents directly at zip root (/)
+    shutil.copytree(src_tools, stage_dir, dirs_exist_ok=True)
 
-    # Clean zip structure: README.txt at root of zip only
+    # Clean zip structure: use central tools/README.txt at root of zip
     tools_readme = SCRIPT_DIR / "tools" / "README.txt"
     if tools_readme.exists():
         shutil.copy2(tools_readme, stage_dir / "README.txt")
 
-    # Ensure no README.txt inside stage_pkg root (subfolder nfsu2thai/README.txt is fine)
-    pkg_readme = stage_pkg / "README.txt"
-    if pkg_readme.exists():
-        pkg_readme.unlink()
-
     # Ensure no app/ directory exists (Anti-clutter / PortMaster flat invariant)
-    app_dir = stage_pkg / "app"
+    app_dir = stage_dir / "app"
     if app_dir.exists():
         shutil.rmtree(app_dir)
 

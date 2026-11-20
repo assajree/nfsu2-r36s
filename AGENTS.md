@@ -213,16 +213,12 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 ├── patch_gps.py                         <- Modular patcher for Joypad GPS & Space
 ├── build_copypaste_pack.py / .ps1       <- Standalone drop-in copy-paste pack builder
 ├── build_tools_pack.py / .ps1           <- playOS TOOLS distribution pack builder
-├── build_reset_controls_pack.py         <- Save controls reset pack builder
-├── build_controls_pack.py               <- Gamepad controls remapper pack builder
 ├── NFSU2-thumb.png                      <- Game cover art (512x512)
 ├── ports/                               <- Mirrored /roms/ports/ tree
 │   ├── NFSU2.sh                         <- Master launcher script
 │   └── nfsu2/                           <- Recompiled engine, assets, and configs
 ├── tools/                               <- Project-local tools workspace (Self-contained)
-│   ├── nfsu2_thai/                      <- Source tools suite (installer, switchers, assets)
-│   ├── nfsu2_reset_controls/            <- Save controls reset tool
-│   └── nfsu2_controls/                  <- Gamepad controls remapper & presets tool
+│   └── nfsu2_thai/                      <- Source tools suite (Thai, controls, assets)
 ├── nfsu2_thai/                          <- Drop-in Thai assets & save games
 └── dist/                                <- Packaged zip distributions (copy-paste & tools)
 ```
@@ -231,38 +227,21 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 ```text
 ./tools/
 ├── README.txt                           <- Central tools documentation
-├── nfsu2_thai/                          <- NFSU2 Thai Edition Manager (PortMaster Flat)
-│   ├── NFSU2_Thai.sh                    <- Master Smart TUI Manager (Install, Language, Fast Boot, Uninstall)
-│   ├── README.txt                       <- User guide
-│   ├── images/
-│   │   └── NFSU2_Thai-thumb.png         <- 512x512 Minimalist (#121212) Cover Art
-│   └── nfsu2thai/                       <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
-│       ├── README.txt
-│       ├── gamedata/                    <- Retail game data patch assets
-│       │   ├── SPEED2.EXE               <- Patched v1.0 No-CD executable (4,788,224 bytes)
-│       │   └── LANGUAGES/
-│       │       ├── LanguageTextures.bin <- HD Thai font textures (1,286,144 bytes)
-│       │       └── Thailand.bin         <- Patched Thai localization strings & fonts (264,184 bytes)
-│       └── images/
-│           └── NFSU2_Thai-thumb.png
-└── nfsu2_reset_controls/                <- NFSU2 Save Controls Reset Tool (PortMaster Flat)
-    ├── NFSU2_Reset_Controls.sh          <- Master Save Controls Reset & Backup/Restore TUI
+└── nfsu2_thai/                          <- NFSU2 Thai & Controls Suite (PortMaster Flat)
+    ├── NFSU2_Thai.sh                    <- Master Smart TUI Manager (Install, Language, Fast Boot, Uninstall)
+    ├── NFSU2_Controls.sh                <- Master Gamepad Remapper, Presets & Save Reset TUI
     ├── README.txt                       <- User guide
     ├── images/
-    │   └── NFSU2_Reset_Controls-thumb.png <- 512x512 Minimalist (#121212) Cover Art
-    └── nfsu2resetcontrols/              <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
-        ├── README.txt
-        └── images/
-            └── NFSU2_Reset_Controls-thumb.png
-└── nfsu2_controls/                      <- NFSU2 Controls Manager (PortMaster Flat)
-    ├── NFSU2_Controls.sh                <- Master Gamepad Remapper & Presets TUI
-    ├── README.txt                       <- User guide
-    ├── images/
+    │   ├── NFSU2_Thai-thumb.png         <- 512x512 Minimalist (#121212) Cover Art
     │   └── NFSU2_Controls-thumb.png     <- 512x512 Minimalist (#121212) Cover Art
-    └── nfsu2controls/                   <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
-        ├── README.txt
+    └── nfsu2thai/                       <- Flat lowercase data subfolder (Auto-Hidden by stem-match)
+        ├── gamedata/                    <- Retail game data patch assets
+        │   ├── SPEED2.EXE               <- Patched v1.0 No-CD executable (4,788,224 bytes)
+        │   └── LANGUAGES/
+        │       ├── LanguageTextures.bin <- HD Thai font textures (1,286,144 bytes)
+        │       └── Thailand.bin         <- Patched Thai localization strings & fonts (264,184 bytes)
         └── images/
-            └── NFSU2_Controls-thumb.png
+            └── NFSU2_Thai-thumb.png
 ```
 
 ### Target Device Layout (`/roms/ports/` & `/roms/tools/`)
@@ -299,16 +278,16 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
 
 /roms/ports/ (or /roms/tools/)
 ├── NFSU2_Thai.sh                        <- Master Thai TUI launcher (chmod 755)
-├── NFSU2_Reset_Controls.sh              <- Master Controls Reset & Backup/Restore TUI (chmod 755)
+├── NFSU2_Controls.sh                    <- Master Controls, Presets & Save Reset TUI (chmod 755)
 ├── images/
 │   ├── NFSU2_Thai-thumb.png             <- 512x512 Minimalist Cover Art
-│   └── NFSU2_Reset_Controls-thumb.png   <- 512x512 Minimalist Cover Art
+│   └── NFSU2_Controls-thumb.png         <- 512x512 Minimalist Cover Art
 ├── nfsu2thai/                           <- Flat lowercase Thai data folder (Auto-Hidden)
 │   ├── gamedata/
 │   │   ├── SPEED2.EXE
 │   │   └── LANGUAGES/
 │   └── images/
-└── nfsu2resetcontrols/                  <- Flat lowercase Controls data folder (Auto-Hidden)
+└── nfsu2controls/                       <- Flat lowercase Controls data folder (Auto-Hidden)
     └── images/
 ```
 

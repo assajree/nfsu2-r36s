@@ -173,10 +173,9 @@ def verify_save_file(file_path: str) -> bool:
 
 ---
 
-## 6. เครื่องมือประจำเวิร์กสเปซ (`NFSU2_Reset_Controls.sh`)
+## 6. เครื่องมือประจำเวิร์กสเปซ (`NFSU2_Controls.sh` เมนู `Reset -> Save`)
 
-ในเวิร์กสเปซนี้ ได้มีการสร้างเครื่องมือสำเร็จรูป **`tools/nfsu2_reset_controls/NFSU2_Reset_Controls.sh`** ซึ่งเป็น TUI ที่ทำงานบนเครื่อง R36H โดยตรง:
+ในเวิร์กสเปซนี้ ได้รวมความสามารถการรีเซ็ตปุ่มในไฟล์เซฟไว้ใน **`tools/nfsu2_controls/NFSU2_Controls.sh`** (เมนู `4 Reset` -> `2 Save`) ซึ่งเป็น TUI ที่ทำงานบนเครื่อง R36H โดยตรง:
 1. **Auto-Scan Profiles:** ค้นหาโปรไฟล์ทั้งหมดใน `/roms/ports/nfsu2/gamedata/AppData/Local/NFS Underground 2/`
-2. **Safety Backup:** สำรองไฟล์เซฟต้นฉบับเก็บไว้ที่ `.backup_controls/<PROFILE>.bak` ก่อนลงมือแก้ไขเสมอ
+2. **Safety Backup:** สำรองไฟล์เซฟต้นฉบับเก็บไว้ที่ `.backup_controls/<PROFILE>_<YYYYMMDD_HHMMSS>.bak` ก่อนลงมือแก้ไขทุกครั้ง (ไม่เขียนทับไฟล์เดิม)
 3. **Surgical Patching:** เติม `0x00` ในบล็อก `0xD278..0xD6B6` และคำนวณ Checksum 3 ชั้นใหม่ในเสี้ยววินาที
-4. **Restore Feature:** มีเมนูย้อนคืนค่าจากไฟล์ `.bak` ได้ตลอดเวลาหากผู้ใช้ต้องการ

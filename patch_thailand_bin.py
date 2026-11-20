@@ -17,6 +17,7 @@ import hashlib
 import os
 from pathlib import Path
 import re
+import struct
 import sys
 from typing import List, Tuple, Union
 
@@ -63,6 +64,29 @@ THAILAND_BIN_PATCHES = [
         b"Create Name\x00\x00\x00\x00\x00",
         "Hash 0x3de4eff0: Name entry title 'Create Name'",
     ),
+    (
+        0x3CD78,
+        bytes.fromhex("340e08011700010000fa090000000000"),
+        bytes.fromhex("340e08031700010000fa070000000000"),
+        "FNTF tt14i U+0E34 (สระอิ): height 1->3, yoff 9->7 (fixes invisible sara-i in HUD)",
+    ),
+    (
+        0x3DA78,
+        bytes.fromhex("340e0c021f00010000f70d0000000000"),
+        bytes.fromhex("340e0c041f00010000f70b0000000000"),
+        "FNTF tt21i U+0E34 (สระอิ): height 2->4, yoff 13->11 (matches sara-ee/ue/uee height)",
+    ),
+]
+
+# Source Thai FNTF chunk (conduitmditc_tt21i_thailand) used to remap large HUD fonts
+TT21I_THAI_CHUNK_OFFSET = 0x3CF80
+TT21I_THAI_CHUNK_SIZE = 3312
+
+# Large HUD FNTF chunks that lack Thai glyphs in retail EA Thailand.bin:
+# (chunk_offset, orig_chunk_size, font_label)
+LARGE_FONT_REMAP_TARGETS = [
+    (0x3E000, 4208, "font_conduitmditctt38bi"),
+    (0x3FB00, 3312, "font_impact36"),
 ]
 
 
@@ -101,8 +125,48 @@ def patch_thailand_bin(file_path: Path, revert: bool = False, verify_only: bool 
             print(f"  [WARN] Unexpected bytes at offset 0x{offset:06x}: {curr.hex()}")
             all_patched = False
 
+    # Remap large HUD FNTF chunks (font_conduitmditctt38bi, font_impact36) to conduitmditc_tt21i_thailand
+    if not revert:
+        src_cid, src_csize = struct.unpack_from("<II", raw, TT21I_THAI_CHUNK_OFFSET)
+        if src_cid == 0x00030201 and src_csize == TT21I_THAI_CHUNK_SIZE:
+            src_tail = bytes(
+                raw[
+                    TT21I_THAI_CHUNK_OFFSET + 8 + 0x100 : TT21I_THAI_CHUNK_OFFSET + 8 + TT21I_THAI_CHUNK_SIZE
+                ]
+            )
+            for chunk_off, orig_size, label in LARGE_FONT_REMAP_TARGETS:
+                cid, csize = struct.unpack_from("<II", raw, chunk_off)
+                if cid != 0x00030201:
+                    print(f"  [WARN] Unexpected chunk ID 0x{cid:08x} for {label} at 0x{chunk_off:06x}")
+                    all_patched = False
+                    continue
+
+                cur_tail = bytes(raw[chunk_off + 8 + 0x100 : chunk_off + 8 + TT21I_THAI_CHUNK_SIZE])
+                if csize == TT21I_THAI_CHUNK_SIZE and cur_tail == src_tail:
+                    print(f"  [SKIP] Font remap {label} -> conduitmditc_tt21i_thailand (already applied)")
+                elif csize in (orig_size, TT21I_THAI_CHUNK_SIZE):
+                    all_patched = False
+                    if not verify_only:
+                        struct.pack_into("<I", raw, chunk_off + 4, TT21I_THAI_CHUNK_SIZE)
+                        raw[chunk_off + 8 + 0x100 : chunk_off + 8 + TT21I_THAI_CHUNK_SIZE] = src_tail
+                        if csize == orig_size and orig_size > TT21I_THAI_CHUNK_SIZE:
+                            pad_off = chunk_off + 8 + TT21I_THAI_CHUNK_SIZE
+                            pad_payload = orig_size - TT21I_THAI_CHUNK_SIZE
+                            struct.pack_into("<II", raw, pad_off, 0, pad_payload)
+                            raw[pad_off + 8 : pad_off + 8 + pad_payload] = b"\x00" * pad_payload
+                        modified = True
+                        print(f"  [OK]   Font remap {label} -> conduitmditc_tt21i_thailand")
+                    else:
+                        print(f"  [UNPATCHED] Font remap {label} -> conduitmditc_tt21i_thailand")
+                else:
+                    print(f"  [WARN] Unexpected chunk size {csize} for {label} at 0x{chunk_off:06x}")
+                    all_patched = False
+        else:
+            print(f"  [WARN] Source Thai font chunk not found at 0x{TT21I_THAI_CHUNK_OFFSET:06x}")
+            all_patched = False
+
     if verify_only:
-        print(f"Status: {'PATCHED (ASCII Name Entry Safe)' if all_patched else 'UNPATCHED'}")
+        print(f"Status: {'PATCHED (ASCII Name Entry + Thai HUD Fonts)' if all_patched else 'UNPATCHED'}")
         return all_patched
 
     if modified:
@@ -127,6 +191,7 @@ def main():
     if not targets:
         script_dir = Path(__file__).resolve().parent
         default_candidates = [
+            script_dir / "tools" / "nfsu2_thai" / "nfsu2thai" / "gamedata" / "LANGUAGES" / "Thailand.bin",
             script_dir / "ports" / "nfsu2" / "gamedata" / "LANGUAGES" / "Thailand.bin",
             script_dir / "nfsu2" / "gamedata" / "LANGUAGES" / "Thailand.bin",
             script_dir / "nfsu2_thai" / "LANGUAGES" / "Thailand.bin",

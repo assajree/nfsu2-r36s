@@ -91,6 +91,12 @@
 | `0x243AA` | `\x88\x84\x85\x88\xa4\x9e\x83\x85:\x00` (10 B) | `Name:\0\0\0\0\0` (10 B) | `0x22729437` | Name entry prompt |
 | `0x24228` | `\xa4\x9e\x83\x85\x00` (5 B) | `NAME\0` (5 B) | `0x818f0385` | Header label |
 | `0x24158` | Thai title string (16 B) | `Create Name\0\0\0\0\0` (16 B) | `0x3de4eff0` | Dialog title |
+| `0x3CD78` | `tt14i` `U+0E34` (`ิ`, `h=1, yoff=9`) | `h=3, yoff=7` | `FNTF` | Fixes invisible sara-i in small HUD text (`เงิน:`) |
+| `0x3DA78` | `tt21i` `U+0E34` (`ิ`, `h=2, yoff=13`) | `h=4, yoff=11` | `FNTF` | Matches sara-ee/ue/uee height |
+| `0x3E000` | `font_conduitmditctt38bi` (4,208 B) | Remapped to `conduitmditc_tt21i_thailand` (3,312 B + 896 B padding) | `FNTF` | Enables Thai text on large HUD labels (Race/Drag/Shift/Finish) |
+| `0x3FB00` | `font_impact36` (3,312 B) | Remapped to `conduitmditc_tt21i_thailand` (3,312 B) | `FNTF` | Enables Thai text on large Impact HUD elements |
+
+* **Patched `Thailand.bin` v1.1 MD5:** `f7e36ceea8de96024fb808ac0c38d82f` (264,184 bytes)
 
 ---
 
