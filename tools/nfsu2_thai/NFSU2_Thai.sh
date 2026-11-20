@@ -23,40 +23,6 @@ REAL_SCRIPT="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null || echo
 SCRIPT_DIR="$(cd "$(dirname "$REAL_SCRIPT")" && pwd)"
 SCRIPT_NAME="$(basename "$REAL_SCRIPT")"
 
-# 2. Locate NFSU2 Port Directory
-NFSU2_DIR=""
-for cand in "/roms/ports/nfsu2" "/roms2/ports/nfsu2" "/roms/ports/NFSU2"; do
-    if [ -d "$cand" ] && [ -d "$cand/gamedata" ]; then
-        NFSU2_DIR="$(cd "$cand" && pwd)"
-        break
-    fi
-done
-
-if [ -z "$NFSU2_DIR" ]; then
-    echo "[!] ERROR: NFSU2 game folder not found at /roms/ports/nfsu2/"
-    sleep 3
-    exit 1
-fi
-
-GAMEDATA="$NFSU2_DIR/gamedata"
-BACKUP_DIR="$NFSU2_DIR/.backup_thai"
-CFG_FILE="$NFSU2_DIR/nfsu2.cfg"
-MOVIES_DIR="$GAMEDATA/MOVIES"
-
-# Locate Thai Game Assets (Search PortMaster flat directory first)
-THAI_ASSETS_DIR=""
-for cand_assets in \
-    "$SCRIPT_DIR/nfsu2thai/gamedata" \
-    "$SCRIPT_DIR/gamedata" \
-    "/roms/ports/nfsu2thai/gamedata" \
-    "/roms/tools/nfsu2_thai/nfsu2thai/gamedata" \
-    "/roms/tools/nfsu2_thai/gamedata"; do
-    if [ -d "$cand_assets" ] && [ -f "$cand_assets/LANGUAGES/Thailand.bin" ]; then
-        THAI_ASSETS_DIR="$cand_assets"
-        break
-    fi
-done
-
 # ------------------------------------------------------------------------------
 # Environment Detection & Gamepad Input Setup (Native /dev/tty1 + gptokeyb)
 # ------------------------------------------------------------------------------
@@ -135,8 +101,11 @@ select = tab
 start = enter
 EOF
 
-        "$GPTOKEYB_BIN" -1 "$SCRIPT_NAME" -c "$GPTK_CONF" >/dev/null 2>&1 &
+        TARGET_NAME="$SCRIPT_NAME"
+        [ "$TARGET_NAME" = "bash" ] || [ "$TARGET_NAME" = "sh" ] && TARGET_NAME="NFSU2_Thai.sh"
+        "$GPTOKEYB_BIN" -1 "$TARGET_NAME" -c "$GPTK_CONF" >/dev/null 2>&1 &
         GPTOKEYB_PID=$!
+        sleep 0.2
     fi
 
     setfont /usr/share/consolefonts/Lat7-TerminusBold20x10.psf.gz -C /dev/tty1 2>/dev/null || \
@@ -154,8 +123,114 @@ fi
 # Ensure dialog binary is available
 if ! command -v dialog >/dev/null 2>&1; then
     echo "[!] ERROR: 'dialog' package is not installed." >&2
+    [ "$IS_SSH" -eq 0 ] && printf "\n[!] ERROR: 'dialog' package is not installed.\n" > /dev/tty1 2>/dev/null && sleep 4
     exit 1
 fi
+
+# ------------------------------------------------------------------------------
+# 2. Locate NFSU2 Port Directory (SD1 / SD2 / Custom Mounts + Interactive Picker)
+# ------------------------------------------------------------------------------
+resolve_gamedata() {
+    local base="$1"
+    if [ -d "$base/gamedata" ]; then
+        echo "$base/gamedata"
+        return 0
+    elif [ -d "$base/GAMEDATA" ]; then
+        echo "$base/GAMEDATA"
+        return 0
+    fi
+    return 1
+}
+
+NFSU2_DIR=""
+GAMEDATA=""
+
+# 2a. Auto-detect exact 'nfsu2' folder (case-insensitive) in Script Dir, /roms/ports, and /roms2/ports
+for root in "$SCRIPT_DIR" /roms/ports /roms2/ports; do
+    [ -d "$root" ] || continue
+    for cand in "$root"/*; do
+        [ -d "$cand" ] || continue
+        if [ "$(basename "$cand" | tr '[:upper:]' '[:lower:]')" = "nfsu2" ]; then
+            if GAMEDATA="$(resolve_gamedata "$cand")"; then
+                NFSU2_DIR="$(cd "$cand" && pwd)"
+                break 2
+            fi
+        fi
+    done
+done
+
+# 2b. Interactive Folder Picker if auto-detection failed
+if [ -z "$NFSU2_DIR" ]; then
+    while true; do
+        CAND_DIRS=()
+        MENU_ITEMS=()
+        IDX=1
+        for root in /roms/ports /roms2/ports; do
+            [ -d "$root" ] || continue
+            for sub in "$root"/*; do
+                [ -d "$sub" ] || continue
+                CAND_DIRS+=("$sub")
+                MENU_ITEMS+=("$IDX" "$sub")
+                IDX=$((IDX + 1))
+            done
+        done
+
+        if [ ${#CAND_DIRS[@]} -eq 0 ]; then
+            dialog --backtitle "NFSU2 Thai Manager" --title "Game Not Found" \
+                --msgbox "\n  [!] NFSU2 game folder (with gamedata/) was not found.\n\n  Checked:\n    - /roms/ports/nfsu2\n    - /roms2/ports/nfsu2 & NFSU2\n    - /mnt/*/ports & /media/*/ports\n\n  Press A or Enter to exit." \
+                13 62 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+            exit 1
+        fi
+
+        dialog \
+            --backtitle "NFSU2 Thai Manager | Folder Not Auto-Detected" \
+            --title "Select NFSU2 Game Folder" \
+            --ok-label "Select" \
+            --cancel-label "Exit" \
+            --menu "\nCould not auto-detect NFSU2 (gamedata/).\nSelect your NFSU2 port folder below:" \
+            16 64 7 \
+            "${MENU_ITEMS[@]}" \
+            2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+        RET=$?
+        PICK=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+        rm -f "$CHOICE_TMP"
+
+        if [ $RET -ne 0 ] || [ -z "$PICK" ]; then
+            exit 1
+        fi
+
+        PICK_DIR="${CAND_DIRS[$((PICK - 1))]}"
+        if GAMEDATA="$(resolve_gamedata "$PICK_DIR")"; then
+            NFSU2_DIR="$(cd "$PICK_DIR" && pwd)"
+            break
+        else
+            dialog --backtitle "NFSU2 Thai Manager" --title "Invalid Folder" \
+                --msgbox "\n  [!] 'gamedata/' not found inside:\n  $PICK_DIR\n\n  Please select the folder containing 'gamedata/'.\n\n  Press A or Enter to try again." \
+                11 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+        fi
+    done
+fi
+
+BACKUP_DIR="$NFSU2_DIR/.backup_thai"
+CFG_FILE="$NFSU2_DIR/nfsu2.cfg"
+MOVIES_DIR="$GAMEDATA/MOVIES"
+
+# Locate Thai Game Assets (Search PortMaster flat directory first, SD1/SD2)
+THAI_ASSETS_DIR=""
+for cand_assets in \
+    "$SCRIPT_DIR/nfsu2thai/gamedata" \
+    "$SCRIPT_DIR/gamedata" \
+    "/roms/ports/nfsu2thai/gamedata" \
+    "/roms2/ports/nfsu2thai/gamedata" \
+    "/roms/tools/nfsu2_thai/nfsu2thai/gamedata" \
+    "/roms2/tools/nfsu2_thai/nfsu2thai/gamedata" \
+    "/roms/tools/nfsu2_thai/gamedata"; do
+    if [ -d "$cand_assets" ] && [ -f "$cand_assets/LANGUAGES/Thailand.bin" ]; then
+        THAI_ASSETS_DIR="$cand_assets"
+        break
+    fi
+done
 
 # ------------------------------------------------------------------------------
 # 5. Intro Movies List & Status Scanner
@@ -966,7 +1041,7 @@ while true; do
         TAG4="uninstall"
         LABEL4="Uninstall NFSU2 Thai"
 
-        BACKTITLE="NFSU2 Thai Manager v1.1 | Thai: $STATUS_PATCH | Lang: $CURRENT_LANG | Intro: $INTRO_STATUS"
+        BACKTITLE="NFSU2 Thai | $NFSU2_DIR"
         MENU_PROMPT="\nCurrent Settings:\n  * NFSU2 Thai   : $STATUS_PATCH\n  * Language     : $CURRENT_LANG\n  * Intro Movies : $INTRO_STATUS\n\nChoose an action below, or press < Exit > to quit:"
 
         dialog \
@@ -987,7 +1062,7 @@ while true; do
         LABEL1="Install NFSU2 Thai"
         STATUS_PATCH="Not Installed"
 
-        BACKTITLE="NFSU2 Thai Manager v1.1 | Thai: $STATUS_PATCH | Lang: $CURRENT_LANG | Intro: $INTRO_STATUS"
+        BACKTITLE="NFSU2 Thai | $NFSU2_DIR"
         MENU_PROMPT="\nCurrent Settings:\n  * NFSU2 Thai   : $STATUS_PATCH\n  * Language     : $CURRENT_LANG\n  * Intro Movies : $INTRO_STATUS\n\nChoose an action below, or press < Exit > to quit:"
 
         dialog \
