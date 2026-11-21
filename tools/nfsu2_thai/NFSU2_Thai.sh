@@ -372,6 +372,27 @@ do_install_thai() {
         fi
     fi
 
+    # Validate required US car models (CIVIC & RSX) before modifying any game files
+    CARS_DIR=""
+    for cand_cars in "$GAMEDATA/CARS" "$GAMEDATA/cars"; do
+        if [ -d "$cand_cars" ]; then
+            CARS_DIR="$cand_cars"
+            break
+        fi
+    done
+    HAS_CIVIC=0
+    HAS_RSX=0
+    if [ -n "$CARS_DIR" ]; then
+        ([ -d "$CARS_DIR/CIVIC" ] || [ -d "$CARS_DIR/civic" ]) && HAS_CIVIC=1
+        ([ -d "$CARS_DIR/RSX" ] || [ -d "$CARS_DIR/rsx" ]) && HAS_RSX=1
+    fi
+    if [ "$HAS_CIVIC" -eq 0 ] || [ "$HAS_RSX" -eq 0 ]; then
+        dialog --backtitle "NFSU2 Thai Manager v1.1" --title "Unsupported Game Region" \
+            --msgbox "\n  [!] Missing required car models: CARS/CIVIC and/or CARS/RSX\n\n  Thai SPEED2.EXE (US v1.0) requires CIVIC & RSX in gamedata/CARS/.\n  Please use the US PC game data or install nfsu2_cars_us.zip first.\n\n  Aborted without modifying game files.\n\n  Press A or Enter to return." \
+            13 68 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+        return
+    fi
+
     (
         echo "10" ; echo "XXX" ; echo "Backing up original game files..." ; echo "XXX"
         mkdir -p "$BACKUP_DIR"

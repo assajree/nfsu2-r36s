@@ -28,6 +28,7 @@ When the game launches to the menu/garage (`Crib01.BIN`) but freezes upon enteri
    * **US Retail**: has `gamedata/CARS/CIVIC/`, no `CORSA/`.
    * **EU / Thai PC Retail**: has `gamedata/CARS/CORSA/`, no `CIVIC/`.
    * Loading a US Career save (`SVVV`) with EU `CARS/` (or vice versa) causes `thread 1` to hang indefinitely when entering Career mode, even though `SVVV` is uncorrupted, `English` language fails identically, and a newly created profile works.
-   * **Fix**: Pair `SVVV` with the matching region's `gamedata/` (e.g. US `nfsu2` folder for US `SVVV`) rather than mixing `CARS/` across regions.
+   * **Findings**: `GLOBALB.BUN` in both US and EA Thai already defines `CarTypeInfo` (`0x890` bytes) for all 4 cars (`CIVIC`, `RSX`, `CORSA`, `PEUGOT106`), and `SOUND/` is identical.
+   * **Fix**: Either pair `SVVV` with the matching region's `gamedata/`, or copy `CIVIC` and `RSX` into EA Thai/EU `gamedata/CARS/` (e.g. via `dist/nfsu2_cars_us.zip`). Verified: adding `CIVIC` and `RSX` resolves Career freezes when loading US saves (`SVVV`) with US v1.0 `SPEED2.EXE`. (Loading EU saves owning `CORSA`/`PEUGOT106` under US v1.0 `SPEED2.EXE` has not been tested, and Car Lot purchase lists remain gated by `SPEED2.EXE` / `nfsu2.aarch64` region logic `sub_005706C0` and the 26-car arrays at `0x7f6da4` / `0x7f6dc0`.)
 3. **Car Selection Note**:
    * Changing cars in Main Menu `Customize` / `Quick Race` does not change the Career car in `SVVV`; Career cars can only be changed at an in-game Car Lot or Garage.
