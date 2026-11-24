@@ -438,6 +438,26 @@ def patch_arm64_binary(path: Path, revert: bool = False, verify_only: bool = Fal
         if is_v12_yuv
         else [PATCH5A_ORIG_V10, PATCH5A_ORIG_V10_GCC11, PATCH5A_ORIG_V12, PATCH5A_PREV]
     )
+    # Accept any relinked build whose 39 non-PC-relative instructions match PATCH5A_ORIG_V10
+    # and whose 4 ADRP+ADD slots (15,16 = x26; 37,38 = x28) have the exact expected opcodes/regs.
+    if off_p5a is not None and off_p5a + len(PATCH5A_ORIG_V10) <= len(raw):
+        cur_p5a = bytes(raw[off_p5a:off_p5a + len(PATCH5A_ORIG_V10)])
+        if cur_p5a not in p5a_orig_list and cur_p5a != PATCH5A_NEW:
+            got_w = struct.unpack("<43I", cur_p5a)
+            ref_w = struct.unpack("<43I", PATCH5A_ORIG_V10)
+            reloc_checks = {
+                15: (0x9F00001F, 0x9000001A),  # adrp x26, #page
+                16: (0xFFC003FF, 0x9100035A),  # add  x26, x26, #off
+                37: (0x9F00001F, 0x9000001C),  # adrp x28, #page
+                38: (0xFFC003FF, 0x9100039C),  # add  x28, x28, #off
+            }
+            if all(
+                ((got_w[i] & reloc_checks[i][0]) == reloc_checks[i][1])
+                if i in reloc_checks
+                else (got_w[i] == ref_w[i])
+                for i in range(43)
+            ):
+                p5a_orig_list.append(cur_p5a)
 
     sites = [
         ("1. Async MovieTexture Lock (textureLockAsync)", off_p1, [PATCH1_ORIG], PATCH1_NEW),

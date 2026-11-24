@@ -210,6 +210,11 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_GPU_PROBE=0           # 0 disables 8-frame glFinish() probe stall every 240 frames
 #   NFSU2_GPU_LOAD=0            # 0 disables per-frame sysfs GPU utilisation reads
 #   NFSU2_PRESENT_SLOTS=3       # 3 = triple-buffered presenter thread (2 = double-buffered)
+#   NFSU2_HALF_REFLECT=2        # car envmap update divider while driving: 0 off (default), 2 = 1/2 rate, N = 1/N
+#   NFSU2_CROWD=0               # override g_CrowdEnable (0 or 1; unset = use profile default)
+#   NFSU2_PARTICLES=0           # override g_ParticleSystemEnable (0 or 1; unset = use profile default)
+#   NFSU2_DISTANT_AI_RATE=2     # distant AI car physics/controller divider: 0 off (default), 2..4 = 1/N rate
+#   NFSU2_DISTANT_AI_DIST=45    # metres from player car beyond which distant AI throttling applies
 # ---------------------------------------------------------------------------
 NFSU2_GRAPHICS=ultra_performance
 NFSU2_FPS=30
@@ -221,6 +226,11 @@ NFSU2_LANG=Thai
 NFSU2_GPU_PROBE=0
 NFSU2_GPU_LOAD=0
 NFSU2_PRESENT_SLOTS=3
+NFSU2_HALF_REFLECT=0
+NFSU2_CROWD=""
+NFSU2_PARTICLES=""
+NFSU2_DISTANT_AI_RATE=0
+NFSU2_DISTANT_AI_DIST=45
 [ -f "$GAMEDIR/nfsu2.cfg" ] && . "$GAMEDIR/nfsu2.cfg"
 
 # Apply smart per-profile defaults if not explicitly overridden in nfsu2.cfg
@@ -231,8 +241,8 @@ else
   [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
 fi
 
-export NFSU2_DRAW_DIST NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS
-for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS; do
+export NFSU2_DRAW_DIST NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS NFSU2_HALF_REFLECT NFSU2_DISTANT_AI_RATE NFSU2_DISTANT_AI_DIST
+for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS NFSU2_CROWD NFSU2_PARTICLES; do
   eval "[ -n \"\${$v:-}\" ] && export $v"
 done
 # HUD layout table of ThirteenAG's widescreen fix (MIT, see widescreen/LICENSE), used on wide screens
@@ -256,8 +266,11 @@ if [ "$NFSU2_GPU_EXTRAS" = "ab" ]; then
 fi
 GPU_EXTRAS=""
 [ "$NFSU2_GPU_EXTRAS" = "1" ] && GPU_EXTRAS="g_TextureFiltering=2;g_TintingEnable=1;g_CarLodLevel=1"
-export NFSU2_REGISTRY="$COMMON;$PROFILE${GPU_EXTRAS:+;$GPU_EXTRAS}${NFSU2_REGISTRY_EXTRA:+;$NFSU2_REGISTRY_EXTRA}"
-CAP_ARG="--cap60"; [ "$NFSU2_FPS" = "30" ] && CAP_ARG="--cap30"
+TRADE_OFFS=""
+[ -n "${NFSU2_CROWD:-}" ] && TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_CrowdEnable=$NFSU2_CROWD"
+[ -n "${NFSU2_PARTICLES:-}" ] && TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_ParticleSystemEnable=$NFSU2_PARTICLES"
+export NFSU2_REGISTRY="$COMMON;$PROFILE${GPU_EXTRAS:+;$GPU_EXTRAS}${TRADE_OFFS:+;$TRADE_OFFS}${NFSU2_REGISTRY_EXTRA:+;$NFSU2_REGISTRY_EXTRA}"
+CAP_ARG="--cap=${NFSU2_FPS:-30}"
 
 # Record the clocks actually in effect (launcher.log next to log.txt)
 {

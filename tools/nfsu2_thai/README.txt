@@ -2,10 +2,11 @@
 NFSU2 Thai & Controls Manager — All-in-One Suite for R36H / R36S (playOS / ArkOS)
 ==============================================================================
 
-ชุดเครื่องมือจัดการภาษาไทยและปุ่มจอยสำหรับ Need for Speed: Underground 2 บนเครื่อง R36H / R36S
-ประกอบด้วย 2 โปรแกรมหลัก:
+ชุดเครื่องมือจัดการภาษาไทย ปุ่มจอย และกราฟิกสำหรับ Need for Speed: Underground 2 บนเครื่อง R36H / R36S
+ประกอบด้วย 3 โปรแกรมหลัก:
   1. NFSU2_Thai.sh     — ติดตั้ง/สลับภาษาไทย ซับไตเติล และ Fast Boot
   2. NFSU2_Controls.sh — ตั้งค่าปุ่มจอย (Presets / Custom) และรีเซ็ตปุ่มในเซฟ
+  3. NFSU2_Graphics.sh — ปรับแต่งเฟรมเรต กราฟิก และ Performance Trade-offs (v1.1)
 
 Patch Note v1.1 (NFSU2_Thai.sh):
 ------------------------------------------------------------------------------
@@ -38,8 +39,20 @@ Patch Note v1.1 (NFSU2_Thai.sh):
      Shift Up/Down, Look Back, Camera, Reset Car)
 3. Reset Controls (Config & Save):
    - Reset -> Config: ล้าง controls.cfg และค่า SDL_GAMECONTROLLERCONFIG ใน nfsu2.cfg
-   - Reset -> Save  : รีเซ็ตการตั้งค่าปุ่มในเซฟเกม (0xD278..0xD6B6) พร้อมคำนวณ CRC32
-                      ใหม่ โดยรักษาความคืบหน้า รถ และเงินในเซฟไว้ครบ 100%
+   - Reset -> Save  : รีเซ็ตการตั้งค่าปุ่มในเซฟเกมพร้อมคำนวณค่าตรวจสอบใหม่
+                      โดยรักษาความคืบหน้า รถ และเงินในเซฟไว้ครบ 100%
+
+คุณสมบัติหลัก (NFSU2_Graphics.sh v1.1):
+------------------------------------------------------------------------------
+1. Frame Rate Limit: เลือกจำกัดเฟรมเรต (20 / 30 / 60 FPS)
+2. Graphics Profile: เลือกโปรไฟล์กราฟิก (Ultra Performance / Performance / Balanced / Quality)
+   โดยยังคงค่า Performance Trade-offs ที่ตั้งไว้เดิมทั้งหมด
+3. Performance Trade-offs: ปรับลดงานที่ไม่จำเป็นเพื่อช่วยให้เกมลื่นขึ้น
+   - Car Reflection Rate : ลดความถี่การอัปเดตเงาสะท้อนบนตัวรถขณะขับ (OFF / 1/2 / 1/3 / 1/4 Rate)
+   - Distant AI Throttle : ลดภาระการคำนวณรถ AI ที่อยู่ไกล (OFF / 1/2 >45m / 1/3 >45m / 1/2 >30m)
+   - Crowd Override      : บังคับเปิดหรือปิดคนดูข้างสนามทับค่าโปรไฟล์
+   - Particles Override  : บังคับเปิดหรือปิดควันยางและประกายไฟทับค่าโปรไฟล์
+   - มีปุ่มลัด Enable All Recommended (เปิดชุดแนะนำครบทั้ง 4 ตัว) และ Reset All to Default
 
 มาตรฐาน PortMaster & playOS (Zero fb0_mirror, Flat Side-by-Side):
 ------------------------------------------------------------------------------
@@ -51,11 +64,13 @@ Patch Note v1.1 (NFSU2_Thai.sh):
 วิธีติดตั้งใช้งานบนเครื่อง R36H / R36S:
 ------------------------------------------------------------------------------
 [วิธีที่ 1 - แนะนำ] ติดตั้งใน Ports (/roms/ports/):
-  คัดลอกไฟล์ต่อไปนี้ไปไว้ที่ /roms/ports/
+  คัดลอกไฟล์ต่อไปนี้ไปไว้ที่ /roms/ports/ (หรือ /roms/tools/ สำหรับตัวตั้งค่าที่ต้องการ)
     - NFSU2_Thai.sh
     - NFSU2_Controls.sh
+    - NFSU2_Graphics.sh
     - images/NFSU2_Thai-thumb.png
     - images/NFSU2_Controls-thumb.png
+    - images/NFSU2_Graphics-thumb.png
     - โฟลเดอร์ nfsu2thai/
 
 [วิธีที่ 2] ติดตั้งใน Tools (/roms/tools/):

@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==============================================================================
-# Tool: NFSU2 Graphics & FPS Manager v1.0 (R36H / playOS / ArkOS)
+# Tool: NFSU2 Graphic Tuner v1.1 (R36H / playOS / ArkOS)
 # Description: Standalone interactive ncurses TUI to configure:
-#                1. Frame Rate Limit   (20 / 30 / 60 FPS)
-#                2. Graphics Profile   (ultra_performance / performance / balanced / quality)
-#                3. FPS Counter Overlay (ON / OFF)
+#                1. Frame Rate Limit      (20 / 30 / 60 FPS)
+#                2. Graphics Profile      (ultra_performance / performance / balanced / quality)
+#                3. Performance Trade-offs (Car Reflect, Distant AI, Crowd, Particles)
 # Archetype: Multi-Config Interactive TUI Tool (Flat Side-by-Side)
 # Standard: Native /dev/tty1 Console + gptokeyb (Zero fb0_mirror)
 # UI Language: 100% Pure ASCII English (Console Font Invariant)
@@ -166,14 +166,14 @@ if [ -z "$NFSU2_DIR" ]; then
         done
 
         if [ ${#CAND_DIRS[@]} -eq 0 ]; then
-            dialog --backtitle "NFSU2 Graphics & FPS" --title "Game Not Found" \
+            dialog --backtitle "NFSU2 Graphic Tuner" --title "Game Not Found" \
                 --msgbox "\n  [!] NFSU2 game folder (with gamedata/) was not found.\n\n  Checked:\n    - /roms/ports/nfsu2\n    - /roms2/ports/nfsu2\n\n  Press A or Enter to exit." \
                 12 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
             exit 1
         fi
 
         dialog \
-            --backtitle "NFSU2 Graphics & FPS | Folder Not Auto-Detected" \
+            --backtitle "NFSU2 Graphic Tuner | Folder Not Auto-Detected" \
             --title "Select NFSU2 Game Folder" \
             --ok-label "Select" \
             --cancel-label "Exit" \
@@ -195,7 +195,7 @@ if [ -z "$NFSU2_DIR" ]; then
             NFSU2_DIR="$(cd "$PICK_DIR" && pwd)"
             break
         else
-            dialog --backtitle "NFSU2 Graphics & FPS" --title "Invalid Folder" \
+            dialog --backtitle "NFSU2 Graphic Tuner" --title "Invalid Folder" \
                 --msgbox "\n  [!] 'gamedata/' not found inside:\n  $PICK_DIR\n\n  Press A or Enter to try again." \
                 10 60 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
         fi
@@ -238,44 +238,88 @@ del_cfg_key() {
     sync
 }
 
+read_cfg_key() {
+    local key="$1"
+    [ -f "$CFG_FILE" ] || return 0
+    grep "^${key}=" "$CFG_FILE" 2>/dev/null | tail -n1 | cut -d= -f2 | tr -d ' "\r'
+}
+
 scan_status() {
     CURRENT_FPS="30"
     CURRENT_GFX="performance"
     CURRENT_DIST="200"
     CURRENT_SCALE="1.0"
-    CURRENT_SHOW_FPS="0"
+    CURRENT_REFL="0"
+    CURRENT_AI_RATE="0"
+    CURRENT_AI_DIST="45"
+    CURRENT_CROWD="default"
+    CURRENT_PART="default"
 
     if [ -f "$CFG_FILE" ]; then
         local v
-        v=$(grep "^NFSU2_FPS=" "$CFG_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r')
-        [ -n "$v" ] && CURRENT_FPS="$v"
-
-        v=$(grep "^NFSU2_GRAPHICS=" "$CFG_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r')
-        [ -n "$v" ] && CURRENT_GFX="$v"
-
-        v=$(grep "^NFSU2_DRAW_DIST=" "$CFG_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r')
-        [ -n "$v" ] && CURRENT_DIST="$v"
-
-        v=$(grep "^NFSU2_RENDER_SCALE=" "$CFG_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r')
-        [ -n "$v" ] && CURRENT_SCALE="$v"
-
-        v=$(grep "^NFSU2_SHOW_FPS=" "$CFG_FILE" 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' "\r')
-        [ "$v" = "1" ] && CURRENT_SHOW_FPS="1"
+        v="$(read_cfg_key NFSU2_FPS)";             [ -n "$v" ] && CURRENT_FPS="$v"
+        v="$(read_cfg_key NFSU2_GRAPHICS)";        [ -n "$v" ] && CURRENT_GFX="$v"
+        v="$(read_cfg_key NFSU2_DRAW_DIST)";       [ -n "$v" ] && CURRENT_DIST="$v"
+        v="$(read_cfg_key NFSU2_RENDER_SCALE)";    [ -n "$v" ] && CURRENT_SCALE="$v"
+        v="$(read_cfg_key NFSU2_HALF_REFLECT)";    [ -n "$v" ] && CURRENT_REFL="$v"
+        v="$(read_cfg_key NFSU2_DISTANT_AI_RATE)"; [ -n "$v" ] && CURRENT_AI_RATE="$v"
+        v="$(read_cfg_key NFSU2_DISTANT_AI_DIST)"; [ -n "$v" ] && CURRENT_AI_DIST="$v"
+        v="$(read_cfg_key NFSU2_CROWD)";           [ -n "$v" ] && CURRENT_CROWD="$v"
+        v="$(read_cfg_key NFSU2_PARTICLES)";       [ -n "$v" ] && CURRENT_PART="$v"
     fi
 
-    if [ "$CURRENT_SHOW_FPS" = "1" ]; then
-        SHOW_FPS_LABEL="ON"
+    # Normalize aliases (1 -> 2)
+    [ "$CURRENT_REFL" = "1" ] && CURRENT_REFL="2"
+    [ "$CURRENT_AI_RATE" = "1" ] && CURRENT_AI_RATE="2"
+
+    # Human-readable labels
+    if [ "$CURRENT_REFL" = "0" ]; then
+        REFL_LABEL="OFF"
     else
-        SHOW_FPS_LABEL="OFF"
+        REFL_LABEL="1/${CURRENT_REFL} Rate"
+    fi
+
+    if [ "$CURRENT_AI_RATE" = "0" ]; then
+        AI_LABEL="OFF"
+        CURRENT_AI_CHOICE="0"
+    else
+        AI_LABEL="1/${CURRENT_AI_RATE} >${CURRENT_AI_DIST}m"
+        CURRENT_AI_CHOICE="${CURRENT_AI_RATE}:${CURRENT_AI_DIST}"
+    fi
+
+    case "$CURRENT_CROWD" in
+        "0") CROWD_LABEL="Force OFF" ;;
+        "1") CROWD_LABEL="Force ON" ;;
+        *)   CURRENT_CROWD="default"; CROWD_LABEL="Preset" ;;
+    esac
+
+    case "$CURRENT_PART" in
+        "0") PART_LABEL="Force OFF" ;;
+        "1") PART_LABEL="Force ON" ;;
+        *)   CURRENT_PART="default"; PART_LABEL="Preset" ;;
+    esac
+
+    local active_cnt=0
+    [ "$CURRENT_REFL" != "0" ] && active_cnt=$((active_cnt + 1))
+    [ "$CURRENT_AI_RATE" != "0" ] && active_cnt=$((active_cnt + 1))
+    [ "$CURRENT_CROWD" != "default" ] && active_cnt=$((active_cnt + 1))
+    [ "$CURRENT_PART" != "default" ] && active_cnt=$((active_cnt + 1))
+
+    if [ "$active_cnt" -eq 0 ]; then
+        TRADEOFF_SUMMARY="Default"
+    elif [ "$active_cnt" -eq 4 ]; then
+        TRADEOFF_SUMMARY="4/4 active"
+    else
+        TRADEOFF_SUMMARY="${active_cnt}/4 active"
     fi
 }
 
 # ------------------------------------------------------------------------------
-# 4. Submenus
+# 4. Core Submenus
 # ------------------------------------------------------------------------------
 do_select_fps() {
     dialog \
-        --backtitle "NFSU2 Graphics & FPS | Current: ${CURRENT_FPS} FPS" \
+        --backtitle "NFSU2 Graphic Tuner | Current: ${CURRENT_FPS} FPS" \
         --title "Select Frame Rate Limit" \
         --ok-label "Apply" \
         --cancel-label "Back" \
@@ -297,19 +341,19 @@ do_select_fps() {
     fi
 
     set_cfg_key "NFSU2_FPS" "$new_fps"
-    dialog --backtitle "NFSU2 Graphics & FPS" --title "Frame Rate Updated" \
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Frame Rate Updated" \
         --msgbox "\n  [OK] Frame Rate Limit set to: ${new_fps} FPS\n\n  Press A or Enter to continue." \
         9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 do_select_graphics() {
     dialog \
-        --backtitle "NFSU2 Graphics & FPS | Current: $CURRENT_GFX" \
+        --backtitle "NFSU2 Graphic Tuner | Current: $CURRENT_GFX" \
         --title "Select Graphics Profile" \
         --ok-label "Apply" \
         --cancel-label "Back" \
         --default-item "$CURRENT_GFX" \
-        --menu "\nCurrent Profile: $CURRENT_GFX (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\nChoose target performance vs visual quality:" \
+        --menu "\nCurrent Profile: $CURRENT_GFX (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\n(Performance Trade-offs are preserved)" \
         16 64 4 \
         "ultra_performance" "Max 30 FPS (0.75x scale, 120m, no shadows/FX)" \
         "performance"       "Fast 30 FPS (1.0x scale, 200m, low FX)" \
@@ -344,64 +388,238 @@ do_select_graphics() {
     local scale_label="1.0x (640x480)"
     [ -n "$new_scale" ] && scale_label="${new_scale}x (480x360)"
 
-    dialog --backtitle "NFSU2 Graphics & FPS" --title "Graphics Profile Updated" \
-        --msgbox "\n  [OK] Graphics Profile set to: $new_gfx\n\n  * Draw Distance : ${new_dist}m\n  * Render Scale  : $scale_label\n\n  Press A or Enter to continue." \
-        11 58 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
-}
-
-do_select_show_fps() {
-    dialog \
-        --backtitle "NFSU2 Graphics & FPS | FPS Overlay: $SHOW_FPS_LABEL" \
-        --title "FPS Counter Overlay" \
-        --ok-label "Apply" \
-        --cancel-label "Back" \
-        --default-item "$CURRENT_SHOW_FPS" \
-        --menu "\nCurrent FPS Counter Overlay: $SHOW_FPS_LABEL\n(In-game toggle: Select + R3)" \
-        13 60 2 \
-        "1" "ON  - Show FPS counter at game launch" \
-        "0" "OFF - Hidden at launch (default)" \
-        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
-
-    local rc=$?
-    local new_val
-    new_val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
-    rm -f "$CHOICE_TMP"
-
-    if [ $rc -ne 0 ] || [ -z "$new_val" ]; then
-        return
-    fi
-
-    local state_label="OFF"
-    if [ "$new_val" = "1" ]; then
-        set_cfg_key "NFSU2_SHOW_FPS" "1"
-        state_label="ON"
-    else
-        del_cfg_key "NFSU2_SHOW_FPS"
-    fi
-
-    dialog --backtitle "NFSU2 Graphics & FPS" --title "FPS Overlay Updated" \
-        --msgbox "\n  [OK] FPS Counter Overlay set to: $state_label\n\n  Press A or Enter to continue." \
-        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Graphics Profile Updated" \
+        --msgbox "\n  [OK] Graphics Profile set to: $new_gfx\n\n  * Draw Distance : ${new_dist}m\n  * Render Scale  : $scale_label\n  * Trade-offs    : Preserved (${TRADEOFF_SUMMARY})\n\n  Press A or Enter to continue." \
+        12 58 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 # ------------------------------------------------------------------------------
-# 5. Main Interactive Loop
+# 5. Performance Trade-offs Submenus
+# ------------------------------------------------------------------------------
+do_select_half_reflect() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Car Reflect: $REFL_LABEL" \
+        --title "Car Reflection Update Rate" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$CURRENT_REFL" \
+        --menu "\nThrottle car environment reflection map updates while driving\n(Menus/Garage stay full rate; applies when Car EnvMap is ON):" \
+        16 64 4 \
+        "0" "OFF      - Full rate every frame (default)" \
+        "2" "1/2 Rate - Recommended (15 Hz, ~8% CPU saving)" \
+        "3" "1/3 Rate - Faster (10 Hz while driving)" \
+        "4" "1/4 Rate - Fastest (7.5 Hz while driving)" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+    local lbl="OFF"
+    if [ "$val" = "0" ]; then
+        del_cfg_key "NFSU2_HALF_REFLECT"
+    else
+        set_cfg_key "NFSU2_HALF_REFLECT" "$val"
+        lbl="1/${val} Rate"
+    fi
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Car Reflection Updated" \
+        --msgbox "\n  [OK] Car Reflection Rate set to: $lbl\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_select_distant_ai() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Distant AI: $AI_LABEL" \
+        --title "Distant AI & Physics Throttle" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$CURRENT_AI_CHOICE" \
+        --menu "\nReduce AI controller & physics substep rate for distant cars\n(Player car and nearby opponents always stay at 100%):" \
+        16 64 4 \
+        "0"    "OFF          - Full rate for all cars (default)" \
+        "2:45" "1/2 Rate 45m - Recommended (half rate >45m)" \
+        "3:45" "1/3 Rate 45m - Stronger (1/3 AI, 3 substeps >45m)" \
+        "2:30" "1/2 Rate 30m - Aggressive (half rate >30m)" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+    local lbl="OFF"
+    if [ "$val" = "0" ]; then
+        del_cfg_key "NFSU2_DISTANT_AI_RATE"
+        del_cfg_key "NFSU2_DISTANT_AI_DIST"
+    else
+        local r="${val%%:*}"
+        local d="${val##*:}"
+        set_cfg_key "NFSU2_DISTANT_AI_RATE" "$r"
+        set_cfg_key "NFSU2_DISTANT_AI_DIST" "$d"
+        lbl="1/${r} Rate beyond ${d}m"
+    fi
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Distant AI Updated" \
+        --msgbox "\n  [OK] Distant AI Throttle set to: $lbl\n\n  Press A or Enter to continue." \
+        9 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_select_crowd() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Crowd: $CROWD_LABEL" \
+        --title "Roadside Crowd Override" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$CURRENT_CROWD" \
+        --menu "\nOverride roadside spectator crowds on top of Graphics Profile:" \
+        14 62 3 \
+        "default" "Preset Default - Follow active Graphics Profile" \
+        "0"       "Force OFF      - Disable crowds (faster)" \
+        "1"       "Force ON       - Always show crowds" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+    local lbl="Preset Default"
+    if [ "$val" = "default" ]; then
+        del_cfg_key "NFSU2_CROWD"
+    elif [ "$val" = "0" ]; then
+        set_cfg_key "NFSU2_CROWD" "0"
+        lbl="Force OFF"
+    else
+        set_cfg_key "NFSU2_CROWD" "1"
+        lbl="Force ON"
+    fi
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Crowd Override Updated" \
+        --msgbox "\n  [OK] Crowd Override set to: $lbl\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_select_particles() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Particles: $PART_LABEL" \
+        --title "Particles Override" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$CURRENT_PART" \
+        --menu "\nOverride tire smoke & spark particles on top of Graphics Profile:" \
+        14 62 3 \
+        "default" "Preset Default - Follow active Graphics Profile" \
+        "0"       "Force OFF      - Disable particles (faster)" \
+        "1"       "Force ON       - Always enable particles" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+    local lbl="Preset Default"
+    if [ "$val" = "default" ]; then
+        del_cfg_key "NFSU2_PARTICLES"
+    elif [ "$val" = "0" ]; then
+        set_cfg_key "NFSU2_PARTICLES" "0"
+        lbl="Force OFF"
+    else
+        set_cfg_key "NFSU2_PARTICLES" "1"
+        lbl="Force ON"
+    fi
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Particles Override Updated" \
+        --msgbox "\n  [OK] Particles Override set to: $lbl\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_tradeoffs_enable_all() {
+    set_cfg_key "NFSU2_HALF_REFLECT" "2"
+    set_cfg_key "NFSU2_DISTANT_AI_RATE" "2"
+    set_cfg_key "NFSU2_DISTANT_AI_DIST" "45"
+    set_cfg_key "NFSU2_CROWD" "0"
+    set_cfg_key "NFSU2_PARTICLES" "0"
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Trade-offs Enabled" \
+        --msgbox "\n  [OK] Enabled all recommended trade-offs:\n\n  * Car Reflection : 1/2 Rate\n  * Distant AI     : 1/2 Rate (>45m)\n  * Crowd          : Force OFF\n  * Particles      : Force OFF\n\n  Press A or Enter to continue." \
+        13 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_tradeoffs_reset_all() {
+    del_cfg_key "NFSU2_HALF_REFLECT"
+    del_cfg_key "NFSU2_DISTANT_AI_RATE"
+    del_cfg_key "NFSU2_DISTANT_AI_DIST"
+    del_cfg_key "NFSU2_CROWD"
+    del_cfg_key "NFSU2_PARTICLES"
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Trade-offs Reset" \
+        --msgbox "\n  [OK] All Performance Trade-offs reset to default.\n\n  Press A or Enter to continue." \
+        9 58 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_tradeoffs_menu() {
+    while true; do
+        scan_status
+        dialog \
+            --backtitle "NFSU2 Graphic Tuner | Trade-offs ($TRADEOFF_SUMMARY)" \
+            --title "Performance Trade-offs" \
+            --ok-label "Select" \
+            --cancel-label "Back" \
+            --menu "\nConfigure optional speed vs visual/AI trade-offs:" \
+            17 64 6 \
+            "1" "Car Reflection Rate (${REFL_LABEL})" \
+            "2" "Distant AI Throttle (${AI_LABEL})" \
+            "3" "Crowd Override      (${CROWD_LABEL})" \
+            "4" "Particles Override  (${PART_LABEL})" \
+            "5" "Enable All Recommended" \
+            "6" "Reset All to Default" \
+            2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+        local rc=$?
+        local pick
+        pick=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+        rm -f "$CHOICE_TMP"
+
+        if [ $rc -ne 0 ] || [ -z "$pick" ]; then
+            break
+        fi
+
+        case "$pick" in
+            "1") do_select_half_reflect ;;
+            "2") do_select_distant_ai ;;
+            "3") do_select_crowd ;;
+            "4") do_select_particles ;;
+            "5") do_tradeoffs_enable_all ;;
+            "6") do_tradeoffs_reset_all ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# 6. Main Interactive Loop
 # ------------------------------------------------------------------------------
 while true; do
     scan_status
 
-    MENU_PROMPT="\nCurrent Settings:\n  * Frame Rate Limit : ${CURRENT_FPS} FPS\n  * Graphics Profile : ${CURRENT_GFX} (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\n  * FPS Overlay      : ${SHOW_FPS_LABEL}\n\nChoose a setting to change, or press < Exit > to quit:"
+    MENU_PROMPT="\nCurrent Settings:\n  * Frame Rate Limit : ${CURRENT_FPS} FPS\n  * Graphics Profile : ${CURRENT_GFX} (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\n  * Trade-offs       : Refl=${REFL_LABEL}, AI=${AI_LABEL}\n                       Crowd=${CROWD_LABEL}, Part=${PART_LABEL}\n\nChoose a setting to change, or press < Exit > to quit:"
 
     dialog \
-        --backtitle "NFSU2 Graphics & FPS | $NFSU2_DIR" \
-        --title "NFSU2 Graphics & FPS Manager v1.0" \
+        --backtitle "NFSU2 Graphic Tuner | $NFSU2_DIR" \
+        --title "NFSU2 Graphic Tuner v1.1" \
         --ok-label "Select" \
         --cancel-label "Exit" \
         --menu "$MENU_PROMPT" \
-        17 64 3 \
-        "1" "Frame Rate Limit    (${CURRENT_FPS} FPS)" \
-        "2" "Graphics Profile    (${CURRENT_GFX})" \
-        "3" "FPS Counter Overlay (${SHOW_FPS_LABEL})" \
+        18 64 3 \
+        "1" "Frame Rate Limit       (${CURRENT_FPS} FPS)" \
+        "2" "Graphics Profile       (${CURRENT_GFX})" \
+        "3" "Performance Trade-offs (${TRADEOFF_SUMMARY})" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     RET=$?
@@ -415,7 +633,7 @@ while true; do
     case "$CHOICE" in
         "1") do_select_fps ;;
         "2") do_select_graphics ;;
-        "3") do_select_show_fps ;;
+        "3") do_tradeoffs_menu ;;
     esac
 done
 
