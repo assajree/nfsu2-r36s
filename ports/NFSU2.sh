@@ -190,7 +190,9 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 # These feed the game's OWN PC graphics options (the registry values its Options
 # menu writes), so the game renders exactly as it would on PC with those settings.
 # Override in "$GAMEDIR/nfsu2.cfg", e.g.:
-#   NFSU2_GRAPHICS=ultra_performance  # ultra_performance | performance | balanced | quality
+#   NFSU2_GRAPHICS=performance  # potato_1..3 | performance | balanced | quality
+#   NFSU2_POTATO=0..3           # 0 off, 1 lowest LOD, 2 PS1 Nearest 32px, 3 Witcher Clay 8px
+#   NFSU2_DRAW_BUDGET=0         # target max items/frame (0 = off/fixed dist, e.g. 260..420)
 #   NFSU2_FPS=30                # 30 or 60
 #   NFSU2_REGISTRY_EXTRA="g_CrowdEnable=0"   # any extra g_* option
 #   NFSU2_GPU_EXTRAS=1          # test: options that cost GPU time but no CPU time (trilinear texture
@@ -216,32 +218,54 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_DISTANT_AI_RATE=2     # distant AI car physics/controller divider: 0 off (default), 2..4 = 1/N rate
 #   NFSU2_DISTANT_AI_DIST=45    # metres from player car beyond which distant AI throttling applies
 # ---------------------------------------------------------------------------
-NFSU2_GRAPHICS=ultra_performance
+NFSU2_GRAPHICS=potato_1
+NFSU2_POTATO=""
 NFSU2_FPS=30
 NFSU2_REGISTRY_EXTRA=""
 NFSU2_GPU_EXTRAS=0
 NFSU2_DRAW_DIST=""
+NFSU2_DRAW_BUDGET=""
 NFSU2_RENDER_SCALE=""
 NFSU2_LANG=Thai
 NFSU2_GPU_PROBE=0
 NFSU2_GPU_LOAD=0
 NFSU2_PRESENT_SLOTS=3
 NFSU2_HALF_REFLECT=0
+NFSU2_CAR_REFLECT=""
+NFSU2_HEADLIGHTS=""
 NFSU2_CROWD=""
 NFSU2_PARTICLES=""
-NFSU2_DISTANT_AI_RATE=0
-NFSU2_DISTANT_AI_DIST=45
+NFSU2_DISTANT_AI_RATE=""
+NFSU2_DISTANT_AI_DIST=""
 [ -f "$GAMEDIR/nfsu2.cfg" ] && . "$GAMEDIR/nfsu2.cfg"
 
 # Apply smart per-profile defaults if not explicitly overridden in nfsu2.cfg
-if [ "$NFSU2_GRAPHICS" = "ultra_performance" ]; then
-  [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=120
-  [ -z "$NFSU2_RENDER_SCALE" ] && NFSU2_RENDER_SCALE=0.75
-else
-  [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
-fi
+case "$NFSU2_GRAPHICS" in
+  potato_1)
+    [ -z "$NFSU2_POTATO" ] && NFSU2_POTATO=1
+    [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
+    [ -z "$NFSU2_DRAW_BUDGET" ] && NFSU2_DRAW_BUDGET=0
+    ;;
+  potato_2)
+    [ -z "$NFSU2_POTATO" ] && NFSU2_POTATO=2
+    [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
+    [ -z "$NFSU2_DRAW_BUDGET" ] && NFSU2_DRAW_BUDGET=0
+    ;;
+  potato_3)
+    [ -z "$NFSU2_POTATO" ] && NFSU2_POTATO=3
+    [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
+    [ -z "$NFSU2_DRAW_BUDGET" ] && NFSU2_DRAW_BUDGET=0
+    ;;
+  *)
+    [ -z "$NFSU2_POTATO" ] && NFSU2_POTATO=0
+    [ -z "$NFSU2_DRAW_DIST" ] && NFSU2_DRAW_DIST=200
+    [ -z "$NFSU2_DRAW_BUDGET" ] && NFSU2_DRAW_BUDGET=0
+    ;;
+esac
+[ -z "$NFSU2_DISTANT_AI_RATE" ] && NFSU2_DISTANT_AI_RATE=0
+[ -z "$NFSU2_DISTANT_AI_DIST" ] && NFSU2_DISTANT_AI_DIST=45
 
-export NFSU2_DRAW_DIST NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS NFSU2_HALF_REFLECT NFSU2_DISTANT_AI_RATE NFSU2_DISTANT_AI_DIST
+export NFSU2_POTATO NFSU2_DRAW_DIST NFSU2_DRAW_BUDGET NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS NFSU2_HALF_REFLECT NFSU2_DISTANT_AI_RATE NFSU2_DISTANT_AI_DIST
 for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS NFSU2_CROWD NFSU2_PARTICLES; do
   eval "[ -n \"\${$v:-}\" ] && export $v"
 done
@@ -251,7 +275,9 @@ export NFSU2_WIDESCREEN_DAT="$GAMEDIR/widescreen/NFSUnderground2.WidescreenFix.d
 
 COMMON="NotFirstTime=1;g_MotionBlurEnable=0;g_LightStreaksEnable=0;g_DepthOfFieldEnable=0;g_OverBrightEnable=0;g_BleachByPassEnable=0;g_FSAALevel=0;g_RainEnable=0;g_RacingResolution=0;g_VSyncOn=0;g_CarDamageEnable=0"
 case "$NFSU2_GRAPHICS" in
-  ultra_performance)
+  potato_1)
+    PROFILE="g_PerformanceLevel=0;g_TextureFiltering=0;g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0;g_CarShadowEnable=0;g_CarHeadlightEnable=1;g_CarLightingEnable=0;g_CrowdEnable=0;g_RoadReflectionEnable=0;g_FogEnable=1;g_HorizonFogEnable=1;g_LightGlowEnable=0;g_AnimatedTextureEnable=0;g_ParticleSystemEnable=0;g_WorldLodLevel=0;g_CarLodLevel=0;g_TintingEnable=0" ;;
+  potato_2|potato_3)
     PROFILE="g_PerformanceLevel=0;g_TextureFiltering=0;g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0;g_CarShadowEnable=0;g_CarHeadlightEnable=0;g_CarLightingEnable=0;g_CrowdEnable=0;g_RoadReflectionEnable=0;g_FogEnable=1;g_HorizonFogEnable=1;g_LightGlowEnable=0;g_AnimatedTextureEnable=0;g_ParticleSystemEnable=0;g_WorldLodLevel=0;g_CarLodLevel=0;g_TintingEnable=0" ;;
   performance)
     PROFILE="g_PerformanceLevel=1;g_TextureFiltering=1;g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0;g_CarShadowEnable=1;g_CarHeadlightEnable=1;g_CarLightingEnable=1;g_CrowdEnable=0;g_RoadReflectionEnable=0;g_FogEnable=1;g_HorizonFogEnable=1;g_LightGlowEnable=0;g_AnimatedTextureEnable=1;g_ParticleSystemEnable=0;g_WorldLodLevel=0;g_CarLodLevel=0;g_TintingEnable=0" ;;
@@ -267,6 +293,12 @@ fi
 GPU_EXTRAS=""
 [ "$NFSU2_GPU_EXTRAS" = "1" ] && GPU_EXTRAS="g_TextureFiltering=2;g_TintingEnable=1;g_CarLodLevel=1"
 TRADE_OFFS=""
+if [ "${NFSU2_CAR_REFLECT:-}" = "0" ]; then
+  TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_CarEnvironmentMapEnable=0;g_CarEnvironmentMapUpdateData=0"
+elif [ "${NFSU2_CAR_REFLECT:-}" = "1" ]; then
+  TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_CarEnvironmentMapEnable=1;g_CarEnvironmentMapUpdateData=1"
+fi
+[ -n "${NFSU2_HEADLIGHTS:-}" ] && TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_CarHeadlightEnable=$NFSU2_HEADLIGHTS"
 [ -n "${NFSU2_CROWD:-}" ] && TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_CrowdEnable=$NFSU2_CROWD"
 [ -n "${NFSU2_PARTICLES:-}" ] && TRADE_OFFS="${TRADE_OFFS:+${TRADE_OFFS};}g_ParticleSystemEnable=$NFSU2_PARTICLES"
 export NFSU2_REGISTRY="$COMMON;$PROFILE${GPU_EXTRAS:+;$GPU_EXTRAS}${TRADE_OFFS:+;$TRADE_OFFS}${NFSU2_REGISTRY_EXTRA:+;$NFSU2_REGISTRY_EXTRA}"
@@ -274,7 +306,7 @@ CAP_ARG="--cap=${NFSU2_FPS:-30}"
 
 # Record the clocks actually in effect (launcher.log next to log.txt)
 {
-  echo "[launcher] graphics=$NFSU2_GRAPHICS draw_dist=$NFSU2_DRAW_DIST render_scale=${NFSU2_RENDER_SCALE:-1.0} gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS probe=$NFSU2_GPU_PROBE slots=$NFSU2_PRESENT_SLOTS"
+  echo "[launcher] graphics=$NFSU2_GRAPHICS potato=$NFSU2_POTATO draw_dist=$NFSU2_DRAW_DIST draw_budget=$NFSU2_DRAW_BUDGET render_scale=${NFSU2_RENDER_SCALE:-1.0} gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS probe=$NFSU2_GPU_PROBE slots=$NFSU2_PRESENT_SLOTS"
   echo "[launcher] paused_services=${PAUSED_SERVICES:-none} paused_filebrowser=${FILEBROWSER_CMD:+yes} swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
   # What this kernel offers for GPU load (read by the binary for its [NFSU2 GPU] log line)
   for d in /sys/class/devfreq/*; do [ -d "$d" ] && echo "[launcher] devfreq $d: $(ls "$d" 2>/dev/null | tr '\n' ' ')"; done

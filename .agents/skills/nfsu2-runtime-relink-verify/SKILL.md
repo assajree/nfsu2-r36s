@@ -51,9 +51,11 @@ docker run --rm -v nfsu2-r36s-work:/work -v /mnt/d/r36h/nfsu2/source/nfsu2-recom
    - **Disable Secondary Fast-Paths During Verify (`mode == 2`):** Gate `ov_fx_method()` native `Set*` shortcuts (`overrides.c`) and lazy `CommitChanges` (`hud_half.c`) on `nfs_fx_setup_mode() == 1` so `=2` verifies against authentic lifted D3DX execution.
    - **Post-Loop `_controlfp` Restore in `CommitChanges`:** `guestApply` (preshader VM `sub_00664743`) can set bit `0` of `[fx + 0x118]` *during* the dirty loop. Always check `M8(fx + 0x118) & 1` after the loop (and when `n == 0`), restore `g_fpu_cw` matching CRT `_controlfp([fx + 0x114], 0x30000)` (`g_fpu_cw = (g_fpu_cw & 0x1C3Fu) | pcBits`), and clear `M32(fx + 0x118) &= ~1u`. Save/restore/compare `g_fpu_cw` in the verify harness.
    - **Device-Call Capture Comparison (`naOf`):** When comparing captured D3D9 device calls between native and lifted runs, only compare arguments `1 .. naOf(method) - 1` (e.g., `SetTexture` method `65` and `SetRenderState` method `57` have 3 args `a[0..2]`; comparing `a[3]` reads stale guest stack words from lifted `RECOMP_ICALL`).
-5. **R36S Threaded `Present` Hook Invariant:**
+5. **R36S Threaded `Present` Hook & Potato Mode Invariants:**
    - With `NFSU2_RENDER_THREAD=1` on R36S, `Op::Present` executes in `android/app/src/main/cpp/d3d9_render_thread.inc` rather than `d3d9_bridge.cpp`. Any per-frame hook or divider (such as `nfs_reflect_on_present()`) must be called in both `d3d9_render_thread.inc` and `d3d9_bridge.cpp` or it will never tick on hardware.
    - For car cubemap throttling (`NFSU2_HALF_REFLECT`), only gate cubemap schedule table `0x7FEEA0`; never skip `view4 + 8` (`L_005CA805`), which jumps to `L_005CB7BB` and skips the entire main world view.
+   - In `d3d9_gles.cpp` (`prepareDraw`), classify 2D/UI draws as `is2DUI = hasPositionT || (upData != nullptr) || !m_rs[D3DRS_ZENABLE]` before clamping `GL_TEXTURE_BASE_LEVEL` (`NFSU2_POTATO >= 2`); checking `hasPositionT` alone breaks the rotating minimap, World Map roads, and loading backgrounds.
+   - In `native_scene.c`, gate the `potato_3` `vflags & 0x1800u` skip on `M32(0x00870CB8u) == 0u` so `Car Reflection` (`NFSU2_CAR_REFLECT=1`) can still render cubemaps when enabled.
 
 ## 3. R36H Deployment & Benchmark Runbook
 
@@ -62,6 +64,7 @@ docker run --rm -v nfsu2-r36s-work:/work -v /mnt/d/r36h/nfsu2/source/nfsu2-recom
    - If playOS is freshly flashed/reinstalled or `ssh r36h` fails, run `python3 /mnt/d/r36h/nfsu2/setup_playos_net.py` once to auto-discover the device and re-apply all network/SSH settings.
 2. **Deploy & Verify via `scp` / `ssh r36h`:**
    - Back up `/roms/ports/nfsu2/nfsu2.aarch64.v10` to `.bak_stock` once before overwriting both `nfsu2.aarch64.v10` and `nfsu2.aarch64`.
+   - If the game may be running (`ETXTBSY`), upload via `nfsu2.aarch64.v10.new`, `chmod 755`, then atomically `mv -f` to `nfsu2.aarch64.v10` and `cp -f` to `nfsu2.aarch64`.
    - For verification runs, append `export NFSU2_NATIVE_SCENE=2` (check `[NFSU2 SCENE] verify: ... 0 bad`) or `export NFSU2_NATIVE_SETUP=2` (check `[NFSU2 SETUP] verify: ... 0 bad`) to `/roms/ports/nfsu2/nfsu2.cfg`.
    - For timing / A/B runs, append `export NFSU2_SCENE_TIMING=1` or `export NFSU2_SETUP_TIMING=1` (with `NFSU2_NATIVE_SETUP=1` vs `0`) and check `[NFSU2 SCENE] timing` / `[NFSU2 SETUP] timing`.
    - Always remove temporary `export NFSU2_*` lines from `/roms/ports/nfsu2/nfsu2.cfg` via `sed -i` immediately after pulling `log.txt`.

@@ -247,11 +247,12 @@ read_cfg_key() {
 scan_status() {
     CURRENT_FPS="30"
     CURRENT_GFX="performance"
-    CURRENT_DIST="200"
-    CURRENT_SCALE="1.0"
+    CURRENT_DIST=""
+    CURRENT_BUDGET=""
+    CURRENT_SCALE=""
     CURRENT_REFL="0"
-    CURRENT_AI_RATE="0"
-    CURRENT_AI_DIST="45"
+    CURRENT_CAR_REFL="default"
+    CURRENT_HEAD="default"
     CURRENT_CROWD="default"
     CURRENT_PART="default"
 
@@ -260,32 +261,90 @@ scan_status() {
         v="$(read_cfg_key NFSU2_FPS)";             [ -n "$v" ] && CURRENT_FPS="$v"
         v="$(read_cfg_key NFSU2_GRAPHICS)";        [ -n "$v" ] && CURRENT_GFX="$v"
         v="$(read_cfg_key NFSU2_DRAW_DIST)";       [ -n "$v" ] && CURRENT_DIST="$v"
+        v="$(read_cfg_key NFSU2_DRAW_BUDGET)";     [ -n "$v" ] && CURRENT_BUDGET="$v"
         v="$(read_cfg_key NFSU2_RENDER_SCALE)";    [ -n "$v" ] && CURRENT_SCALE="$v"
         v="$(read_cfg_key NFSU2_HALF_REFLECT)";    [ -n "$v" ] && CURRENT_REFL="$v"
-        v="$(read_cfg_key NFSU2_DISTANT_AI_RATE)"; [ -n "$v" ] && CURRENT_AI_RATE="$v"
-        v="$(read_cfg_key NFSU2_DISTANT_AI_DIST)"; [ -n "$v" ] && CURRENT_AI_DIST="$v"
+        v="$(read_cfg_key NFSU2_CAR_REFLECT)";     [ -n "$v" ] && CURRENT_CAR_REFL="$v"
+        v="$(read_cfg_key NFSU2_HEADLIGHTS)";      [ -n "$v" ] && CURRENT_HEAD="$v"
         v="$(read_cfg_key NFSU2_CROWD)";           [ -n "$v" ] && CURRENT_CROWD="$v"
         v="$(read_cfg_key NFSU2_PARTICLES)";       [ -n "$v" ] && CURRENT_PART="$v"
     fi
 
+    local def_dist="200" def_budget="0" def_scale="1.0"
+    case "$CURRENT_GFX" in
+        potato_1|potato_2|potato_3) def_dist="200"; def_budget="0"; def_scale="1.0" ;;
+    esac
+
+    local eff_dist="$CURRENT_DIST" eff_budget="$CURRENT_BUDGET"
+    [ -z "$eff_dist" ] && eff_dist="$def_dist"
+    [ -z "$eff_budget" ] && eff_budget="$def_budget"
+
+    EFF_DIST="$eff_dist"
+    EFF_BUDGET="$eff_budget"
+    if [ -z "$CURRENT_DIST" ] && [ -z "$CURRENT_BUDGET" ]; then
+        VIS_PICK="auto"
+        [ "$def_budget" = "0" ] && VIS_LABEL="Auto (${def_dist}m)" || VIS_LABEL="Auto-Scale ${def_budget}"
+    elif [ "$eff_budget" != "0" ]; then
+        VIS_PICK="scale"
+        VIS_LABEL="Auto-Scale ${eff_budget}"
+    elif [ "$eff_dist" = "0" ]; then
+        VIS_PICK="off"
+        VIS_LABEL="OFF"
+    else
+        VIS_PICK="fixed"
+        VIS_LABEL="Fixed ${eff_dist}m"
+    fi
+
+    if [ -z "$CURRENT_SCALE" ]; then
+        SCALE_PICK="auto"
+        CURRENT_SCALE="$def_scale"
+        case "$def_scale" in
+            0.50|0.5) SCALE_LABEL="Auto (320x240)" ;;
+            0.65)     SCALE_LABEL="Auto (416x312)" ;;
+            0.75)     SCALE_LABEL="Auto (480x360)" ;;
+            0.85)     SCALE_LABEL="Auto (544x408)" ;;
+            *)        SCALE_LABEL="Auto (640x480)" ;;
+        esac
+    else
+        SCALE_PICK="$CURRENT_SCALE"
+        case "$CURRENT_SCALE" in
+            0.50|0.5) SCALE_PICK="0.50"; SCALE_LABEL="0.50x (320x240)" ;;
+            0.65)     SCALE_LABEL="0.65x (416x312)" ;;
+            0.75)     SCALE_LABEL="0.75x (480x360)" ;;
+            0.85)     SCALE_LABEL="0.85x (544x408)" ;;
+            1.0|1.00) SCALE_PICK="1.0";  SCALE_LABEL="1.0x (640x480)" ;;
+            *)        SCALE_LABEL="${CURRENT_SCALE}x" ;;
+        esac
+    fi
+
     # Normalize aliases (1 -> 2)
     [ "$CURRENT_REFL" = "1" ] && CURRENT_REFL="2"
-    [ "$CURRENT_AI_RATE" = "1" ] && CURRENT_AI_RATE="2"
 
     # Human-readable labels
-    if [ "$CURRENT_REFL" = "0" ]; then
-        REFL_LABEL="OFF"
+    if [ "$CURRENT_CAR_REFL" = "0" ]; then
+        REFL_PICK="off"
+        REFL_LABEL="Force OFF"
+    elif [ "$CURRENT_CAR_REFL" = "1" ]; then
+        if [ "$CURRENT_REFL" = "0" ]; then
+            REFL_PICK="1"
+            REFL_LABEL="ON Full"
+        else
+            REFL_PICK="$CURRENT_REFL"
+            REFL_LABEL="ON 1/${CURRENT_REFL}"
+        fi
+    elif [ "$CURRENT_REFL" = "0" ]; then
+        REFL_PICK="default"
+        REFL_LABEL="Preset"
     else
-        REFL_LABEL="1/${CURRENT_REFL} Rate"
+        REFL_PICK="$CURRENT_REFL"
+        REFL_LABEL="Preset 1/${CURRENT_REFL}"
     fi
 
-    if [ "$CURRENT_AI_RATE" = "0" ]; then
-        AI_LABEL="OFF"
-        CURRENT_AI_CHOICE="0"
-    else
-        AI_LABEL="1/${CURRENT_AI_RATE} >${CURRENT_AI_DIST}m"
-        CURRENT_AI_CHOICE="${CURRENT_AI_RATE}:${CURRENT_AI_DIST}"
-    fi
+    case "$CURRENT_HEAD" in
+        "0") HEAD_LABEL="Force OFF" ;;
+        "1") HEAD_LABEL="Force ON" ;;
+        *)   CURRENT_HEAD="default"; HEAD_LABEL="Preset" ;;
+    esac
 
     case "$CURRENT_CROWD" in
         "0") CROWD_LABEL="Force OFF" ;;
@@ -300,17 +359,16 @@ scan_status() {
     esac
 
     local active_cnt=0
-    [ "$CURRENT_REFL" != "0" ] && active_cnt=$((active_cnt + 1))
-    [ "$CURRENT_AI_RATE" != "0" ] && active_cnt=$((active_cnt + 1))
+    { [ "$CURRENT_REFL" != "0" ] || [ "$CURRENT_CAR_REFL" != "default" ]; } && active_cnt=$((active_cnt + 1))
     [ "$CURRENT_CROWD" != "default" ] && active_cnt=$((active_cnt + 1))
     [ "$CURRENT_PART" != "default" ] && active_cnt=$((active_cnt + 1))
 
     if [ "$active_cnt" -eq 0 ]; then
         TRADEOFF_SUMMARY="Default"
-    elif [ "$active_cnt" -eq 4 ]; then
-        TRADEOFF_SUMMARY="4/4 active"
+    elif [ "$active_cnt" -eq 3 ]; then
+        TRADEOFF_SUMMARY="3/3 active"
     else
-        TRADEOFF_SUMMARY="${active_cnt}/4 active"
+        TRADEOFF_SUMMARY="${active_cnt}/3 active"
     fi
 }
 
@@ -324,11 +382,11 @@ do_select_fps() {
         --ok-label "Apply" \
         --cancel-label "Back" \
         --default-item "$CURRENT_FPS" \
-        --menu "\nCurrent Frame Rate Limit: ${CURRENT_FPS} FPS\nChoose target frame rate cap:" \
-        14 62 3 \
-        "30" "30 FPS - Standard (Recommended, smooth 2:2 VSync)" \
-        "20" "20 FPS - Locked 3:3 VSync (cooler, zero dips)" \
-        "60" "60 FPS - Uncapped up to 60 (fluctuates in city)" \
+        --menu "\nCurrent: ${CURRENT_FPS} FPS" \
+        13 58 3 \
+        "30" "30 FPS (Recommended)" \
+        "20" "20 FPS" \
+        "60" "60 FPS" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -353,12 +411,14 @@ do_select_graphics() {
         --ok-label "Apply" \
         --cancel-label "Back" \
         --default-item "$CURRENT_GFX" \
-        --menu "\nCurrent Profile: $CURRENT_GFX (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\n(Performance Trade-offs are preserved)" \
-        16 64 4 \
-        "ultra_performance" "Max 30 FPS (0.75x scale, 120m, no shadows/FX)" \
-        "performance"       "Fast 30 FPS (1.0x scale, 200m, low FX)" \
-        "balanced"          "Balanced (1.0x scale, 200m, medium FX)" \
-        "quality"           "High Quality (1.0x scale, 200m, high FX)" \
+        --menu "\nCurrent: $CURRENT_GFX" \
+        16 58 6 \
+        "potato_3"    "Potato" \
+        "potato_2"    "PS1" \
+        "potato_1"    "Lite" \
+        "performance" "Fast 30 FPS" \
+        "balanced"    "Balanced" \
+        "quality"     "High Quality" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -370,27 +430,176 @@ do_select_graphics() {
         return
     fi
 
-    local new_dist="200"
-    local new_scale=""
-    if [ "$new_gfx" = "ultra_performance" ]; then
-        new_dist="120"
-        new_scale="0.75"
-    fi
-
     set_cfg_key "NFSU2_GRAPHICS" "$new_gfx"
-    set_cfg_key "NFSU2_DRAW_DIST" "$new_dist"
-    if [ -n "$new_scale" ]; then
-        set_cfg_key "NFSU2_RENDER_SCALE" "$new_scale"
-    else
-        del_cfg_key "NFSU2_RENDER_SCALE"
-    fi
-
-    local scale_label="1.0x (640x480)"
-    [ -n "$new_scale" ] && scale_label="${new_scale}x (480x360)"
+    del_cfg_key "NFSU2_POTATO"
+    scan_status
 
     dialog --backtitle "NFSU2 Graphic Tuner" --title "Graphics Profile Updated" \
-        --msgbox "\n  [OK] Graphics Profile set to: $new_gfx\n\n  * Draw Distance : ${new_dist}m\n  * Render Scale  : $scale_label\n  * Trade-offs    : Preserved (${TRADEOFF_SUMMARY})\n\n  Press A or Enter to continue." \
+        --msgbox "\n  [OK] Graphics Profile set to: $new_gfx\n\n  * Visibility    : ${VIS_LABEL}\n  * Render Scale  : ${SCALE_LABEL}\n  * Trade-offs    : Preserved (${TRADEOFF_SUMMARY})\n\n  Press A or Enter to continue." \
         12 58 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+}
+
+do_select_fixed_dist() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Draw Distance: $VIS_LABEL" \
+        --title "Fixed Draw Distance" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$EFF_DIST" \
+        --menu "\nCurrent: $VIS_LABEL\nHigher distance = more performance drop:" \
+        19 58 8 \
+        "50"  "50m" \
+        "60"  "60m" \
+        "70"  "70m" \
+        "80"  "80m" \
+        "90"  "90m" \
+        "100" "100m" \
+        "120" "120m" \
+        "150" "150m" \
+        "200" "200m (Recommended)" \
+        "250" "250m" \
+        "300" "300m" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return 1
+
+    set_cfg_key "NFSU2_DRAW_DIST" "$val"
+    set_cfg_key "NFSU2_DRAW_BUDGET" "0"
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Draw Distance Updated" \
+        --msgbox "\n  [OK] Draw Distance set to: Fixed ${val}m\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+    return 0
+}
+
+do_select_autoscale() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Draw Distance: $VIS_LABEL" \
+        --title "Auto-Scale (Draw Budget)" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$EFF_BUDGET" \
+        --menu "\nMax items/frame (cap 200m)\nHigher limit = more performance drop:" \
+        19 58 8 \
+        "200" "200 items" \
+        "240" "240 items" \
+        "280" "280 items" \
+        "320" "320 items" \
+        "360" "360 items" \
+        "400" "400 items (Recommended)" \
+        "450" "450 items" \
+        "500" "500 items" \
+        "600" "600 items" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return 1
+
+    set_cfg_key "NFSU2_DRAW_DIST" "200"
+    set_cfg_key "NFSU2_DRAW_BUDGET" "$val"
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Draw Distance Updated" \
+        --msgbox "\n  [OK] Draw Distance set to: Auto-Scale ${val}\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+    return 0
+}
+
+do_select_draw_distance() {
+    while true; do
+        scan_status
+        dialog \
+            --backtitle "NFSU2 Graphic Tuner | Draw Distance: $VIS_LABEL" \
+            --title "Draw Distance" \
+            --ok-label "Select" \
+            --cancel-label "Back" \
+            --default-item "$VIS_PICK" \
+            --menu "\nCurrent: $VIS_LABEL" \
+            13 58 4 \
+            "auto"  "Auto" \
+            "fixed" "Fixed Distance" \
+            "scale" "Auto-Scale" \
+            "off"   "OFF" \
+            2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+        local rc=$?
+        local val
+        val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+        rm -f "$CHOICE_TMP"
+        [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+        case "$val" in
+            auto)
+                del_cfg_key "NFSU2_DRAW_DIST"
+                del_cfg_key "NFSU2_DRAW_BUDGET"
+                dialog --backtitle "NFSU2 Graphic Tuner" --title "Draw Distance Updated" \
+                    --msgbox "\n  [OK] Draw Distance set to: Auto\n\n  Press A or Enter to continue." \
+                    9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+                return
+                ;;
+            fixed)
+                do_select_fixed_dist && return
+                ;;
+            scale)
+                do_select_autoscale && return
+                ;;
+            off)
+                set_cfg_key "NFSU2_DRAW_DIST" "0"
+                set_cfg_key "NFSU2_DRAW_BUDGET" "0"
+                dialog --backtitle "NFSU2 Graphic Tuner" --title "Draw Distance Updated" \
+                    --msgbox "\n  [OK] Draw Distance set to: OFF\n\n  Press A or Enter to continue." \
+                    9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+                return
+                ;;
+        esac
+    done
+}
+
+do_select_resolution() {
+    dialog \
+        --backtitle "NFSU2 Graphic Tuner | Resolution: $SCALE_LABEL" \
+        --title "Select Render Resolution" \
+        --ok-label "Apply" \
+        --cancel-label "Back" \
+        --default-item "$SCALE_PICK" \
+        --menu "\nCurrent: $SCALE_LABEL" \
+        15 58 6 \
+        "auto" "Auto (Profile)" \
+        "1.0"  "640x480 (1.00x)" \
+        "0.85" "544x408 (0.85x)" \
+        "0.75" "480x360 (0.75x)" \
+        "0.65" "416x312 (0.65x)" \
+        "0.50" "320x240 (0.50x)" \
+        2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
+
+    local rc=$?
+    local val
+    val=$(cat "$CHOICE_TMP" 2>/dev/null | tr -d ' "\r\n')
+    rm -f "$CHOICE_TMP"
+    [ $rc -ne 0 ] || [ -z "$val" ] && return
+
+    local lbl="Auto (Profile Default)"
+    if [ "$val" = "auto" ]; then
+        del_cfg_key "NFSU2_RENDER_SCALE"
+    else
+        set_cfg_key "NFSU2_RENDER_SCALE" "$val"
+        case "$val" in
+            1.0)  lbl="1.00x (640x480)" ;;
+            0.85) lbl="0.85x (544x408)" ;;
+            0.75) lbl="0.75x (480x360)" ;;
+            0.65) lbl="0.65x (416x312)" ;;
+            0.50) lbl="0.50x (320x240)" ;;
+            *)    lbl="${val}x" ;;
+        esac
+    fi
+
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Resolution Updated" \
+        --msgbox "\n  [OK] Render Resolution set to: $lbl\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 # ------------------------------------------------------------------------------
@@ -399,16 +608,19 @@ do_select_graphics() {
 do_select_half_reflect() {
     dialog \
         --backtitle "NFSU2 Graphic Tuner | Car Reflect: $REFL_LABEL" \
-        --title "Car Reflection Update Rate" \
+        --title "Car Reflection" \
         --ok-label "Apply" \
         --cancel-label "Back" \
-        --default-item "$CURRENT_REFL" \
-        --menu "\nThrottle car environment reflection map updates while driving\n(Menus/Garage stay full rate; applies when Car EnvMap is ON):" \
-        16 64 4 \
-        "0" "OFF      - Full rate every frame (default)" \
-        "2" "1/2 Rate - Recommended (15 Hz, ~8% CPU saving)" \
-        "3" "1/3 Rate - Faster (10 Hz while driving)" \
-        "4" "1/4 Rate - Fastest (7.5 Hz while driving)" \
+        --default-item "$REFL_PICK" \
+        --menu "\nCurrent: $REFL_LABEL" \
+        17 58 7 \
+        "default" "Preset Default" \
+        "off"     "Force OFF" \
+        "1"       "ON (Full Rate)" \
+        "2"       "ON (1/2 Rate)" \
+        "4"       "ON (1/4 Rate)" \
+        "8"       "ON (1/8 Rate)" \
+        "16"      "ON (1/16 Rate)" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -417,32 +629,46 @@ do_select_half_reflect() {
     rm -f "$CHOICE_TMP"
     [ $rc -ne 0 ] || [ -z "$val" ] && return
 
-    local lbl="OFF"
-    if [ "$val" = "0" ]; then
-        del_cfg_key "NFSU2_HALF_REFLECT"
-    else
-        set_cfg_key "NFSU2_HALF_REFLECT" "$val"
-        lbl="1/${val} Rate"
-    fi
+    local lbl="Preset Default"
+    case "$val" in
+        default)
+            del_cfg_key "NFSU2_CAR_REFLECT"
+            del_cfg_key "NFSU2_HALF_REFLECT"
+            ;;
+        off)
+            set_cfg_key "NFSU2_CAR_REFLECT" "0"
+            del_cfg_key "NFSU2_HALF_REFLECT"
+            lbl="Force OFF"
+            ;;
+        1)
+            set_cfg_key "NFSU2_CAR_REFLECT" "1"
+            del_cfg_key "NFSU2_HALF_REFLECT"
+            lbl="ON (Full Rate)"
+            ;;
+        2|3|4|8|16)
+            set_cfg_key "NFSU2_CAR_REFLECT" "1"
+            set_cfg_key "NFSU2_HALF_REFLECT" "$val"
+            lbl="ON (1/${val} Rate)"
+            ;;
+    esac
 
     dialog --backtitle "NFSU2 Graphic Tuner" --title "Car Reflection Updated" \
-        --msgbox "\n  [OK] Car Reflection Rate set to: $lbl\n\n  Press A or Enter to continue." \
+        --msgbox "\n  [OK] Car Reflection set to: $lbl\n\n  Press A or Enter to continue." \
         9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
-do_select_distant_ai() {
+do_select_headlights() {
     dialog \
-        --backtitle "NFSU2 Graphic Tuner | Distant AI: $AI_LABEL" \
-        --title "Distant AI & Physics Throttle" \
+        --backtitle "NFSU2 Graphic Tuner | Headlights: $HEAD_LABEL" \
+        --title "Car Headlights" \
         --ok-label "Apply" \
         --cancel-label "Back" \
-        --default-item "$CURRENT_AI_CHOICE" \
-        --menu "\nReduce AI controller & physics substep rate for distant cars\n(Player car and nearby opponents always stay at 100%):" \
-        16 64 4 \
-        "0"    "OFF          - Full rate for all cars (default)" \
-        "2:45" "1/2 Rate 45m - Recommended (half rate >45m)" \
-        "3:45" "1/3 Rate 45m - Stronger (1/3 AI, 3 substeps >45m)" \
-        "2:30" "1/2 Rate 30m - Aggressive (half rate >30m)" \
+        --default-item "$CURRENT_HEAD" \
+        --menu "\nCurrent: $HEAD_LABEL" \
+        12 58 3 \
+        "default" "Preset Default" \
+        "0"       "Force OFF" \
+        "1"       "Force ON" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -451,21 +677,20 @@ do_select_distant_ai() {
     rm -f "$CHOICE_TMP"
     [ $rc -ne 0 ] || [ -z "$val" ] && return
 
-    local lbl="OFF"
-    if [ "$val" = "0" ]; then
-        del_cfg_key "NFSU2_DISTANT_AI_RATE"
-        del_cfg_key "NFSU2_DISTANT_AI_DIST"
+    local lbl="Preset Default"
+    if [ "$val" = "default" ]; then
+        del_cfg_key "NFSU2_HEADLIGHTS"
+    elif [ "$val" = "0" ]; then
+        set_cfg_key "NFSU2_HEADLIGHTS" "0"
+        lbl="Force OFF"
     else
-        local r="${val%%:*}"
-        local d="${val##*:}"
-        set_cfg_key "NFSU2_DISTANT_AI_RATE" "$r"
-        set_cfg_key "NFSU2_DISTANT_AI_DIST" "$d"
-        lbl="1/${r} Rate beyond ${d}m"
+        set_cfg_key "NFSU2_HEADLIGHTS" "1"
+        lbl="Force ON"
     fi
 
-    dialog --backtitle "NFSU2 Graphic Tuner" --title "Distant AI Updated" \
-        --msgbox "\n  [OK] Distant AI Throttle set to: $lbl\n\n  Press A or Enter to continue." \
-        9 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+    dialog --backtitle "NFSU2 Graphic Tuner" --title "Headlights Updated" \
+        --msgbox "\n  [OK] Car Headlights set to: $lbl\n\n  Press A or Enter to continue." \
+        9 54 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 do_select_crowd() {
@@ -475,11 +700,11 @@ do_select_crowd() {
         --ok-label "Apply" \
         --cancel-label "Back" \
         --default-item "$CURRENT_CROWD" \
-        --menu "\nOverride roadside spectator crowds on top of Graphics Profile:" \
-        14 62 3 \
-        "default" "Preset Default - Follow active Graphics Profile" \
-        "0"       "Force OFF      - Disable crowds (faster)" \
-        "1"       "Force ON       - Always show crowds" \
+        --menu "\nCurrent: $CROWD_LABEL" \
+        12 58 3 \
+        "default" "Preset Default" \
+        "0"       "Force OFF" \
+        "1"       "Force ON" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -511,11 +736,11 @@ do_select_particles() {
         --ok-label "Apply" \
         --cancel-label "Back" \
         --default-item "$CURRENT_PART" \
-        --menu "\nOverride tire smoke & spark particles on top of Graphics Profile:" \
-        14 62 3 \
-        "default" "Preset Default - Follow active Graphics Profile" \
-        "0"       "Force OFF      - Disable particles (faster)" \
-        "1"       "Force ON       - Always enable particles" \
+        --menu "\nCurrent: $PART_LABEL" \
+        12 58 3 \
+        "default" "Preset Default" \
+        "0"       "Force OFF" \
+        "1"       "Force ON" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     local rc=$?
@@ -542,17 +767,18 @@ do_select_particles() {
 
 do_tradeoffs_enable_all() {
     set_cfg_key "NFSU2_HALF_REFLECT" "2"
-    set_cfg_key "NFSU2_DISTANT_AI_RATE" "2"
-    set_cfg_key "NFSU2_DISTANT_AI_DIST" "45"
+    del_cfg_key "NFSU2_DISTANT_AI_RATE"
+    del_cfg_key "NFSU2_DISTANT_AI_DIST"
     set_cfg_key "NFSU2_CROWD" "0"
     set_cfg_key "NFSU2_PARTICLES" "0"
 
     dialog --backtitle "NFSU2 Graphic Tuner" --title "Trade-offs Enabled" \
-        --msgbox "\n  [OK] Enabled all recommended trade-offs:\n\n  * Car Reflection : 1/2 Rate\n  * Distant AI     : 1/2 Rate (>45m)\n  * Crowd          : Force OFF\n  * Particles      : Force OFF\n\n  Press A or Enter to continue." \
-        13 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
+        --msgbox "\n  [OK] Enabled all recommended trade-offs:\n\n  * Car Reflection : 1/2 Rate\n  * Crowd          : Force OFF\n  * Particles      : Force OFF\n\n  Press A or Enter to continue." \
+        12 56 < "$DIALOG_IN" > "$DIALOG_OUT" 2>/dev/null
 }
 
 do_tradeoffs_reset_all() {
+    del_cfg_key "NFSU2_CAR_REFLECT"
     del_cfg_key "NFSU2_HALF_REFLECT"
     del_cfg_key "NFSU2_DISTANT_AI_RATE"
     del_cfg_key "NFSU2_DISTANT_AI_DIST"
@@ -568,18 +794,16 @@ do_tradeoffs_menu() {
     while true; do
         scan_status
         dialog \
-            --backtitle "NFSU2 Graphic Tuner | Trade-offs ($TRADEOFF_SUMMARY)" \
+            --backtitle "NFSU2 Graphic Tuner | Performance Trade-offs" \
             --title "Performance Trade-offs" \
             --ok-label "Select" \
             --cancel-label "Back" \
-            --menu "\nConfigure optional speed vs visual/AI trade-offs:" \
-            17 64 6 \
-            "1" "Car Reflection Rate (${REFL_LABEL})" \
-            "2" "Distant AI Throttle (${AI_LABEL})" \
-            "3" "Crowd Override      (${CROWD_LABEL})" \
-            "4" "Particles Override  (${PART_LABEL})" \
-            "5" "Enable All Recommended" \
-            "6" "Reset All to Default" \
+            --menu "\nConfigure optional speed vs visual trade-offs:" \
+            15 58 4 \
+            "1" "Crowd Override      (${CROWD_LABEL})" \
+            "2" "Particles Override  (${PART_LABEL})" \
+            "3" "Enable All Recommended" \
+            "4" "Reset All to Default" \
             2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
         local rc=$?
@@ -592,12 +816,10 @@ do_tradeoffs_menu() {
         fi
 
         case "$pick" in
-            "1") do_select_half_reflect ;;
-            "2") do_select_distant_ai ;;
-            "3") do_select_crowd ;;
-            "4") do_select_particles ;;
-            "5") do_tradeoffs_enable_all ;;
-            "6") do_tradeoffs_reset_all ;;
+            "1") do_select_crowd ;;
+            "2") do_select_particles ;;
+            "3") do_tradeoffs_enable_all ;;
+            "4") do_tradeoffs_reset_all ;;
         esac
     done
 }
@@ -608,18 +830,20 @@ do_tradeoffs_menu() {
 while true; do
     scan_status
 
-    MENU_PROMPT="\nCurrent Settings:\n  * Frame Rate Limit : ${CURRENT_FPS} FPS\n  * Graphics Profile : ${CURRENT_GFX} (${CURRENT_DIST}m, ${CURRENT_SCALE}x)\n  * Trade-offs       : Refl=${REFL_LABEL}, AI=${AI_LABEL}\n                       Crowd=${CROWD_LABEL}, Part=${PART_LABEL}\n\nChoose a setting to change, or press < Exit > to quit:"
-
     dialog \
         --backtitle "NFSU2 Graphic Tuner | $NFSU2_DIR" \
-        --title "NFSU2 Graphic Tuner v1.1" \
+        --title "NFSU2 Graphic Tuner v1.2" \
         --ok-label "Select" \
         --cancel-label "Exit" \
-        --menu "$MENU_PROMPT" \
-        18 64 3 \
+        --menu "\nChoose a setting (or Exit):" \
+        17 60 7 \
         "1" "Frame Rate Limit       (${CURRENT_FPS} FPS)" \
         "2" "Graphics Profile       (${CURRENT_GFX})" \
-        "3" "Performance Trade-offs (${TRADEOFF_SUMMARY})" \
+        "3" "Draw Distance          (${VIS_LABEL})" \
+        "4" "Render Resolution      (${SCALE_LABEL})" \
+        "5" "Car Reflection         (${REFL_LABEL})" \
+        "6" "Car Headlights         (${HEAD_LABEL})" \
+        "7" "Performance Trade-offs" \
         2> "$CHOICE_TMP" < "$DIALOG_IN" > "$DIALOG_OUT"
 
     RET=$?
@@ -633,7 +857,11 @@ while true; do
     case "$CHOICE" in
         "1") do_select_fps ;;
         "2") do_select_graphics ;;
-        "3") do_tradeoffs_menu ;;
+        "3") do_select_draw_distance ;;
+        "4") do_select_resolution ;;
+        "5") do_select_half_reflect ;;
+        "6") do_select_headlights ;;
+        "7") do_tradeoffs_menu ;;
     esac
 done
 
