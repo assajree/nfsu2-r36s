@@ -27,9 +27,11 @@ description: >-
 
 ## Conditional `FMVOpening.vp6` Check Approaches
 When Attract Mode should only be suppressed if `FMVOpening.vp6` is missing:
-1. **C++ Runtime Override (`source/nfsu2-recompiled-r36s/src/runtime/overrides.c`) — *For Recompiled Builds / PRs*:**
-   - Override `sub_004C4EB0` (the screen-switch helper called by `sub_004C53B0` with `"UG_LS_IntroFMV.fng"`).
-   - Cache `access("MOVIES/FMVOpening.vp6", F_OK) == 0` once on first call; if missing and screen name equals `"UG_LS_IntroFMV.fng"`, return immediately without switching screens. Otherwise, delegate to original `sub_004C4EB0()`.
+1. **C Runtime Vtable Override + In-Memory Fast Boot (`source/nfsu2-recompiled-r36s`) — *Recommended for Recompiled Builds / PRs (Zero Guest Recompile, v10 & v12)*:**
+   - `SplashScreen::NotificationMessage` (`0x004C53B0` v10 / `0x004C5580` v12) has **zero direct calls** and is 100% vtable-dispatched (`RECOMP_ICALL` -> `nfs_override_lookup`). Register `ov_splash_notify` in `k_overrides[]` (`src/runtime/overrides.c`) and map `0x004C53B0  0x004C5580  va` in `config/exe_functions.txt` (then run `python3 scripts/exe_variant.py header`). **Do NOT add it to `config/overrides.txt`** (which replaces the lifted body) and **do NOT wrap `sub_004C4EB0`** (which requires rebuilding guest `.o` files).
+   - Inside `ov_splash_notify`: mark `g_splash_reached = 1`, and on `FE_TICK` (`MEM32(g_esp + 4u) == 0xC98356BAu`) when Attract Mode is suppressed, refresh `MEM32(g_ecx + 0x50u) = MEM32(0x008651ACu)` (identical FE tick global in both v10 and v12) before delegating to `recomp_lookup(NFS_VA(0x004C53B0))()`.
+   - **Cross-Platform `FMVOpening.vp6` Detection:** Never use raw POSIX `access("MOVIES/FMVOpening.vp6", F_OK)` inside `overrides.c` (breaks case-sensitive Linux folders and Windows builds where `overrides.c` links without `guest_runtime.cpp`). Instead, probe via `gamePath("MOVIES/FMVOpening.vp6")` in `guest_runtime.cpp` (and `file_exists("MOVIES\\FMVOpening.vp6")` in `src/host/main.c`) and pass the boolean into `nfs_intro_init()`.
+   - **In-Memory Fast Boot (`NFSU2_SKIP_INTRO=1`) & `NFSU2_ATTRACT_MODE=auto|0|1`:** Filter read-only opens/stats in `guest_files.inc` (`createFile`, `fileAttributes`, `longPath`, `findFirstFile`) and `src/shims/win32_shims.c` (`shim_CreateFileA`) for `MOVIES/` stems `ealogo`, `thx_logo`, `fmvopening`, `psa` (plus localized `_*` variants like `THX_logo_fr.vp6`). Never filter `blank.vp6` or `Scene*.vp6`. When both `NFSU2_SKIP_INTRO=1` and `NFSU2_ATTRACT_MODE=1` are set, unhide `fmvopening` once `g_splash_reached == 1` so Attract Mode can still play after 30s.
 2. **Launcher / Manager Toggle (`NFSU2.sh` or `NFSU2_Thai.sh`) — *No Recompile Needed*:**
    - Check `[ -f "$GAMEDATA/MOVIES/FMVOpening.vp6" ]` before launch or inside the Skip/Restore Intro toggle.
    - If missing, apply `patch_attract.py` (`b +0x164`); if present, run `patch_attract.py --revert` (`b.ne +0x164`).
