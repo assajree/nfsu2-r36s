@@ -4,30 +4,31 @@ NFSU2 Thai & Controls Manager — All-in-One Suite for R36H / R36S (playOS / Ark
 
 ชุดเครื่องมือจัดการภาษาไทย ปุ่มจอย และกราฟิกสำหรับ Need for Speed: Underground 2 บนเครื่อง R36H / R36S
 ประกอบด้วย 3 โปรแกรมหลัก:
-  1. NFSU2_Thai.sh     — ติดตั้ง/สลับภาษาไทย ซับไตเติล และ Fast Boot
+  1. NFSU2_Thai.sh     — ติดตั้ง runtime + ภาษาไทย, ซับไตเติล, Skip Intro และ Attract Mode (v2.0)
   2. NFSU2_Controls.sh — ตั้งค่าปุ่มจอย (Presets / Custom) และรีเซ็ตปุ่มในเซฟ
   3. NFSU2_Graphics.sh — ปรับแต่งเฟรมเรต กราฟิก และ Performance Trade-offs (v1.1)
 
-Patch Note v1.1 (NFSU2_Thai.sh):
+Patch Note v2.0 (NFSU2_Thai.sh):
 ------------------------------------------------------------------------------
-- แก้ไขข้อความภาษาไทยบนหน้าจอขณะแข่ง (HUD) ที่ไม่แสดงผล เช่น ลำดับ, จำนวนรอบ,
-  โหมด Drag, ข้อความตอนเปลี่ยนเกียร์ และข้อความตอนแข่งจบ ให้แสดงภาษาไทยครบทุกโหมด
-- แก้ไขสระอิหายในคำว่า "เงิน:" และข้อความภาษาไทยขนาดเล็กบนหน้าจอให้แสดงผลชัดเจน
-- เพิ่มการรองรับปุ่มจอย (ปุ่ม X) เปิดใช้งาน GPS นำทางบนแผนที่ (World Map) ได้ทันที
-  และคืนค่าปุ่ม Y สำหรับตัวกรองไอคอนบนแผนที่
-- ปรับปรุงความลื่นไหลของวิดีโอคัตซีนและอินโทรในเกม แก้อาการกระตุก
+- รวม ARM64 runtime ล่าสุดจาก branch develop (รวมฟีเจอร์ ES3 VAO/Uniforms,
+  Potato Mode, VP6 NEON Video, Native Thai, Joypad GPS, Skip Intro & Attract Mode)
+  ไว้ใน nfsu2thai/runtime/ ไม่ต้องแพตช์ SPEED2.EXE หรือไบนารีบนดิสก์อีกต่อไป
+- เพิ่มตัวเลือกปรับแต่งผ่าน nfsu2.cfg ในเมนูหลักครบถ้วน:
+  * Skip Intro / Fast Boot (NFSU2_SKIP_INTRO=0/1) ข้ามอินโทรในหน่วยความจำโดยไม่แก้ชื่อไฟล์
+  * Title Attract Mode (NFSU2_ATTRACT_MODE=auto/0/1) ป้องกันเพลงหน้า Title รีเซ็ตทุก 30 วินาที
+  * Subtitles (NFSU2_SUBTITLES=auto/1/0) ควบคุมการแสดงคำบรรยายซับไตเติล
+- คืนชื่อไฟล์ _*.vp6 เก่าที่เคยถูก rename ให้อัตโนมัติ และคืนค่าเดิมครบ 100% เมื่อ Uninstall
 
-คุณสมบัติหลัก (NFSU2_Thai.sh):
+คุณสมบัติหลัก (NFSU2_Thai.sh v2.0):
 ------------------------------------------------------------------------------
-1. ติดตั้ง / ถอนการติดตั้งภาษาไทย (Install / Uninstall NFSU2 Thai):
-   - แพตช์ SPEED2.EXE และ engine binary ปลดล็อกฟอนต์ภาษาไทยและซับไตเติล
-   - เลือกเปิด/ปิด Fast Boot ข้ามโลโก้ EA/THX/Opening FMV เพื่อเข้า Title Screen ทันที
-   - สำรองไฟล์เดิมไว้ที่ /roms/ports/nfsu2/.backup_thai/ อย่างปลอดภัย
-   - ถอนการติดตั้งกู้คืนไฟล์ดั้งเดิมได้ 100%
+1. ติดตั้ง / ติดตั้งซ้ำ / ถอนการติดตั้ง (Install / Re-install / Uninstall):
+   - คัดลอก Thailand.bin & LanguageTextures.bin พร้อมอัปเดต runtime (nfsu2.aarch64.v10 + NFSU2.sh)
+   - ตั้งค่า Fast Boot (Skip Intro) และ Attract Mode ได้ทันทีตอนติดตั้ง
+   - สำรองไฟล์เดิมไว้ที่ /roms/ports/nfsu2/.backup_thai/ และถอนการติดตั้งคืนสภาพเดิมได้ 100%
 2. สลับภาษาได้ทันที (Switch Language: Thai <-> English):
-   - สลับระหว่างภาษาไทย (พร้อมซับไตเติล) กับภาษาอังกฤษดั้งเดิมได้ตลอดเวลา
-3. ควบคุมวิดีโออินโทร (Skip <-> Restore Intro Movies):
-   - เปิดหรือปิด Fast Boot ได้อย่างอิสระโดยไม่ต้องลงเกมใหม่
+   - สลับระหว่างภาษาไทยกับภาษาอังกฤษดั้งเดิมผ่าน NFSU2_LANG ได้ตลอดเวลา
+3. ควบคุม Skip Intro / Attract Mode / Subtitles:
+   - เปิด-ปิดและเลือกโหมดทั้งหมดได้อิสระผ่าน nfsu2.cfg โดยไม่แตะต้องไฟล์เกมต้นฉบับ
 
 คุณสมบัติหลัก (NFSU2_Controls.sh):
 ------------------------------------------------------------------------------

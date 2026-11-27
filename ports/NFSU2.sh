@@ -67,7 +67,7 @@ export MALLOC_CHECK_=0
 
 # Clocks: CPU, GPU (Mali) and memory controller (DMC) at their top step while the game runs. The RK3326
 # devfreq governors otherwise keep the GPU and DRAM clocks low, and this game is bound by CPU and memory.
-# Also lower vm.swappiness to prevent SD card swap stutters. Previous state is restored cleanly on exit.
+# The previous governors are restored on exit.
 SUDO="${ESUDO:-sudo}"
 CLOCK_STATE=""
 for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor \
@@ -76,22 +76,12 @@ for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices
   old=$(cat "$gov" 2>/dev/null)
   echo performance | $SUDO tee "$gov" > /dev/null 2>&1 && CLOCK_STATE="$CLOCK_STATE $gov=$old"
 done
-
-OLD_SWAPPINESS=""
-if [ -f /proc/sys/vm/swappiness ]; then
-  OLD_SWAPPINESS=$(cat /proc/sys/vm/swappiness 2>/dev/null)
-  echo 10 | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
-fi
-
-restore_system() {
+restore_clocks() {
   for entry in $CLOCK_STATE; do
     echo "${entry#*=}" | $SUDO tee "${entry%%=*}" > /dev/null 2>&1 || true
   done
-  if [ -n "$OLD_SWAPPINESS" ]; then
-    echo "$OLD_SWAPPINESS" | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
-  fi
 }
-trap restore_system EXIT
+trap restore_clocks EXIT
 
 # R36S 1GB RAM Protection:
 # Free reclaimable page caches to maximize contiguous memory before launching
@@ -169,7 +159,7 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 # These feed the game's OWN PC graphics options (the registry values its Options
 # menu writes), so the game renders exactly as it would on PC with those settings.
 # Override in "$GAMEDIR/nfsu2.cfg", e.g.:
-#   NFSU2_GRAPHICS=performance  # potato_1..3 | performance | balanced | quality
+#   NFSU2_GRAPHICS=quality      # potato_1..3 | performance | balanced | quality
 #   NFSU2_POTATO=0..3           # 0 off, 1 lowest LOD, 2 PS1 Nearest 32px, 3 Witcher Clay 8px
 #   NFSU2_DRAW_BUDGET=0         # target max items/frame (0 = off/fixed dist, e.g. 260..420)
 #   NFSU2_FPS=30                # 30 or 60
@@ -177,8 +167,13 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_GPU_EXTRAS=1          # test: options that cost GPU time but no CPU time (trilinear texture
 #                               # filtering, colour tinting, detailed car models) on top of the profile
 #   NFSU2_GPU_EXTRAS=ab         # alternate off/on at every launch (to compare two sessions' logs)
-#   NFSU2_DRAW_DIST=120         # metres; scenery wholly beyond it is not drawn and the fog reaches
+#   NFSU2_DRAW_DIST=200         # metres; scenery wholly beyond it is not drawn and the fog reaches
 #                               # opaque at that distance, so nothing visibly pops (0 = the game's own)
+#   NFSU2_HALF_REFLECT=2        # car envmap update divider while driving: 0 off (default), 2 = 1/2 rate, N = 1/N
+#   NFSU2_CROWD=0               # override g_CrowdEnable (0 or 1; unset = use profile default)
+#   NFSU2_PARTICLES=0           # override g_ParticleSystemEnable (0 or 1; unset = use profile default)
+#   NFSU2_DISTANT_AI_RATE=2     # distant AI car physics/controller divider: 0 off (default), 2..4 = 1/N rate
+#   NFSU2_DISTANT_AI_DIST=45    # metres from player car beyond which distant AI throttling applies
 # Display (the game adapts to the handheld's own screen; nothing to set on a 640x480 R36S):
 #   NFSU2_ASPECT=auto           # auto: widescreen on 16:9 etc. panels, 4:3 with bars on narrower ones
 #                               # 4:3: always 4:3 (black bars on the sides of a wide screen)
@@ -187,28 +182,19 @@ echo 0 | sudo tee /sys/class/vtconsole/vtcon1/bind > /dev/null 2>&1 || true
 #   NFSU2_SCREEN=854x480        # only if the panel size is detected wrongly
 #   NFSU2_ROTATE=90             # panel mounted rotated (90 or 270; portrait panels default to 90)
 #   NFSU2_SHOW_FPS=1            # frame counter on from the start (Select + R3 toggles it in game)
-# Engine Performance Tuning (defaults eliminate periodic glFinish stalls and enable triple buffering):
-#   NFSU2_GPU_PROBE=0           # 0 disables 8-frame glFinish() probe stall every 240 frames
-#   NFSU2_GPU_LOAD=0            # 0 disables per-frame sysfs GPU utilisation reads
-#   NFSU2_PRESENT_SLOTS=3       # 3 = triple-buffered presenter thread (2 = double-buffered)
-#   NFSU2_HALF_REFLECT=2        # car envmap update divider while driving: 0 off (default), 2 = 1/2 rate, N = 1/N
-#   NFSU2_CROWD=0               # override g_CrowdEnable (0 or 1; unset = use profile default)
-#   NFSU2_PARTICLES=0           # override g_ParticleSystemEnable (0 or 1; unset = use profile default)
-#   NFSU2_DISTANT_AI_RATE=2     # distant AI car physics/controller divider: 0 off (default), 2..4 = 1/N rate
-#   NFSU2_DISTANT_AI_DIST=45    # metres from player car beyond which distant AI throttling applies
+#   NFSU2_SKIP_INTRO=1          # fast boot: skip intro videos (EA/THX/Opening/PSA) without deleting files
+#   NFSU2_ATTRACT_MODE=auto     # auto: disable 30s Title Attract Mode if FMVOpening.vp6 is missing/skipped
+#                               # 0: always disable (keep Title music playing past 30s); 1: original behavior
 # ---------------------------------------------------------------------------
-NFSU2_GRAPHICS=potato_1
+NFSU2_GRAPHICS=balanced
 NFSU2_POTATO=""
-NFSU2_FPS=30
+NFSU2_FPS=60
 NFSU2_REGISTRY_EXTRA=""
 NFSU2_GPU_EXTRAS=0
 NFSU2_DRAW_DIST=""
 NFSU2_DRAW_BUDGET=""
 NFSU2_RENDER_SCALE=""
-NFSU2_LANG=Thai
-NFSU2_GPU_PROBE=0
-NFSU2_GPU_LOAD=0
-NFSU2_PRESENT_SLOTS=3
+NFSU2_LANG=Spanish
 NFSU2_HALF_REFLECT=0
 NFSU2_CAR_REFLECT=""
 NFSU2_HEADLIGHTS=""
@@ -217,8 +203,6 @@ NFSU2_PARTICLES=""
 NFSU2_DISTANT_AI_RATE=""
 NFSU2_DISTANT_AI_DIST=""
 [ -f "$GAMEDIR/nfsu2.cfg" ] && . "$GAMEDIR/nfsu2.cfg"
-
-# Apply smart per-profile defaults if not explicitly overridden in nfsu2.cfg
 case "$NFSU2_GRAPHICS" in
   potato_1)
     [ -z "$NFSU2_POTATO" ] && NFSU2_POTATO=1
@@ -243,9 +227,8 @@ case "$NFSU2_GRAPHICS" in
 esac
 [ -z "$NFSU2_DISTANT_AI_RATE" ] && NFSU2_DISTANT_AI_RATE=0
 [ -z "$NFSU2_DISTANT_AI_DIST" ] && NFSU2_DISTANT_AI_DIST=45
-
-export NFSU2_POTATO NFSU2_DRAW_DIST NFSU2_DRAW_BUDGET NFSU2_LANG NFSU2_GPU_PROBE NFSU2_GPU_LOAD NFSU2_PRESENT_SLOTS NFSU2_HALF_REFLECT NFSU2_DISTANT_AI_RATE NFSU2_DISTANT_AI_DIST
-for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS NFSU2_CROWD NFSU2_PARTICLES; do
+export NFSU2_POTATO NFSU2_DRAW_DIST NFSU2_DRAW_BUDGET NFSU2_LANG NFSU2_HALF_REFLECT NFSU2_DISTANT_AI_RATE NFSU2_DISTANT_AI_DIST
+for v in NFSU2_ASPECT NFSU2_RENDER_SCALE NFSU2_RENDER NFSU2_SCREEN NFSU2_ROTATE NFSU2_SHOW_FPS NFSU2_CROWD NFSU2_PARTICLES NFSU2_SUBTITLES NFSU2_SKIP_INTRO NFSU2_ATTRACT_MODE; do
   eval "[ -n \"\${$v:-}\" ] && export $v"
 done
 # HUD layout table of ThirteenAG's widescreen fix (MIT, see widescreen/LICENSE), used on wide screens
@@ -285,8 +268,7 @@ CAP_ARG="--cap=${NFSU2_FPS:-30}"
 
 # Record the clocks actually in effect (launcher.log next to log.txt)
 {
-  echo "[launcher] graphics=$NFSU2_GRAPHICS potato=$NFSU2_POTATO draw_dist=$NFSU2_DRAW_DIST draw_budget=$NFSU2_DRAW_BUDGET render_scale=${NFSU2_RENDER_SCALE:-1.0} gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS probe=$NFSU2_GPU_PROBE slots=$NFSU2_PRESENT_SLOTS"
-  echo "[launcher] swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
+  echo "[launcher] graphics=$NFSU2_GRAPHICS gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS"
   # What this kernel offers for GPU load (read by the binary for its [NFSU2 GPU] log line)
   for d in /sys/class/devfreq/*; do [ -d "$d" ] && echo "[launcher] devfreq $d: $(ls "$d" 2>/dev/null | tr '\n' ' ')"; done
   for f in /sys/devices/platform/*gpu*/utilisation /sys/class/misc/mali0/device/utilisation; do
@@ -307,11 +289,14 @@ CAP_ARG="--cap=${NFSU2_FPS:-30}"
 # Keep the previous run's log (a crash on one run is otherwise overwritten by the next launch)
 [ -f "$GAMEDIR/log.txt" ] && mv -f "$GAMEDIR/log.txt" "$GAMEDIR/log.prev.txt"
 
-# Launch game with elevated CPU & I/O priority (inherited by child without losing env or user ownership)
+# GPTOKEYB: START + SELECT exit shortcut.
+if [ -n "${GPTOKEYB:-}" ]; then
+  $GPTOKEYB "$BIN" -k &
+fi
+
+# Launch game: GLES 2.0 at the screen's native resolution (see Display above)
 LANG_ARG="--lang=$NFSU2_LANG"
 echo "[NFSU2] running $BIN" > "$GAMEDIR/log.txt"
-$SUDO renice -n -10 -p $$ >/dev/null 2>&1 || true
-command -v ionice >/dev/null 2>&1 && $SUDO ionice -c 2 -n 0 -p $$ >/dev/null 2>&1 || true
 "./$BIN" "$GAMEDIR/gamedata" $CAP_ARG $LANG_ARG >> "$GAMEDIR/log.txt" 2>&1
 EXIT_CODE=$?
 
