@@ -2,7 +2,7 @@
 
 **Document ID:** `NFSU2-R36H-PLAN-PR1`  
 **Target Repository:** `source/nfsu2-recompiled-r36s` ([manuelpllull/nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s))  
-**Scope:** การนำการปรับปรุงประสิทธิภาพวิดีโอคัทซีน (FMV / `.vp6`) ทั้งหมดจาก `patch_video.py` เข้าสู่ซอร์สโค้ด C/C++ โดยตรง พร้อมขั้นตอนการคอมไพล์ (Build) บนเครื่องพกพา R36H (`playOS` Debian 13 arm64) ทั้งแบบด่วน (~15 วินาที) และแบบเต็มรูปแบบ  
+**Scope:** การนำการปรับปรุงประสิทธิภาพวิดีโอคัทซีน (FMV / `.vp6`) ทั้งหมดจาก `patch_video.py` เข้าสู่ซอร์สโค้ด C/C++ โดยตรง พร้อมขั้นตอนการคอมไพล์ (Build) ผ่าน Docker (`nfsu2-r36s-build`) ที่เตรียมไว้บนเครื่อง Linux Host  
 
 > [!NOTE]
 > แผนนี้แยกเฉพาะส่วน **การเพิ่มประสิทธิภาพวิดีโอสากล (Universal Video Performance)** สำหรับทำ Pull Request ที่ 1 โดยไม่มีส่วนของภาษาไทยปะปน (ส่วนภาษาไทยและซับไตเติลแยกไว้ใน [`PLAN_PR_THAI_SUBTITLES.md`](./PLAN_PR_THAI_SUBTITLES.md))
@@ -197,107 +197,41 @@ static const OverrideEntry k_overrides[] = {
 
 ---
 
-## ส่วนที่ 2: คู่มือการ Build บนเครื่อง R36H (`playOS` Debian 13 arm64)
+## ส่วนที่ 2: คู่มือการ Build ผ่าน Docker (`nfsu2-r36s-build`)
 
-เครื่อง R36H ใช้ซีพียู **ARM64 แท้ (`aarch64`)** และมี `gcc 12.4.0`, `binutils` (`as`, `ld`, `objdump`, `objcopy`, `strip`), `python3 3.13.5` ติดตั้งมาแล้วในตัว และมีพื้นที่ว่างบน `/roms` กว่า 10 GB จึงสามารถคอมไพล์ไบนารี `nfsu2.aarch64` บนตัวเครื่อง R36H ได้โดยตรง (ไม่ต้องใช้ Cross-Compiler)
+ใช้ Docker image `nfsu2-r36s-build` และ volume `nfsu2-r36s-work` ที่เตรียมไว้แล้วบนเครื่อง Linux Host (รัน `docker run` โดยตรง ไม่ต้องครอบด้วย `sg docker` และไม่ใช้ `build.py --native` บน host ที่มี `glibc >= 2.29`):
 
-### การเตรียมเครื่อง R36H ครั้งแรก (ทำครั้งเดียวผ่าน SSH)
+### วิธีที่ 1: Fast Runtime Relink (~20 วินาที) — เมื่อแก้ไขเฉพาะ Runtime / Overrides
 
-```bash
-# 1. เชื่อมต่อ SSH เข้าเครื่อง R36H
-ssh ark@playos.local
-
-# 2. ติดตั้ง g++ สำหรับคอมไพล์โค้ด C++17 (d3d9_gles.cpp, guest_runtime.cpp)
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends g++
-
-# 3. สร้าง Swapfile ขนาด 2 GB บน /roms สำหรับขั้นตอน Link ไบนารีขนาด 87 MB
-if [ ! -f /roms/.build_swap ]; then
-    sudo dd if=/dev/zero of=/roms/.build_swap bs=1M count=2048 status=progress
-    sudo chmod 600 /roms/.build_swap
-    sudo mkswap /roms/.build_swap
-fi
-sudo swapon /roms/.build_swap
-free -h
-```
-
----
-
-### วิธีที่ 1: Fast Runtime Build (~15 วินาทีบนเครื่อง R36H) — แนะนำสำหรับทดสอบแก้โค้ด Runtime / Overrides
-
-วิธีนี้ **ไม่ต้อง Lift `SPEED2.EXE` ใหม่ และไม่ต้องคอมไพล์ไฟล์เกม `recomp_*.c` กว่า 110 ไฟล์ใหม่** แต่ดึงไฟล์ Object ของเกมที่คอมไพล์ไว้แล้ว (`guest-objs-v10.tar.gz`) มาใช้ร่วมกับโค้ด Runtime 14 ไฟล์ที่เราแก้ไข ใช้เวลาคอมไพล์และ Link บนเครื่อง R36H เพียง ~15–25 วินาที:
+ใช้เมื่อ `sub_006FFAA7` และ `sub_0070CCE8` ถูก wrap ไว้ใน `guest-v10` แล้ว โดย link โค้ด runtime ใหม่เข้ากับ Guest `.o` ทั้ง 113 ไฟล์ที่ cache อยู่ใน Docker volume `nfsu2-r36s-work`:
 
 ```bash
-# 1. อัปโหลดซอร์สโค้ดไปที่ /roms/build/nfsu2-recompiled-r36s บน R36H
-cd /roms/build/nfsu2-recompiled-r36s
-
-# 2. ดาวน์โหลดและแตกไฟล์ Precompiled Guest Objects (ทำครั้งเดียว)
-mkdir -p build/guest-objs/v10
-curl -fSL https://github.com/manuelpllull/nfsu2-recompiled-r36s/releases/download/r36s-guest-objs/guest-objs-v10.tar.gz \
-  -o build/guest-objs-v10.tar.gz
-tar -xzf build/guest-objs-v10.tar.gz -C build/guest-objs/v10
-
-# 3. เปลี่ยนสัญลักษณ์ sub_006FFAA7 และ sub_0070CCE8 ใน Guest Object ให้เป็น Weak Symbol
-#    เพื่อให้ฟังก์ชันใน overrides.c ของเราถูกเลือกใช้แทนโดยไม่ต้องคอมไพล์ Guest Objects ใหม่
-for o in build/guest-objs/v10/*.o; do
-    objcopy --weaken-symbol=sub_006FFAA7 --weaken-symbol=sub_0070CCE8 "$o" 2>/dev/null || true
-done
-
-# 4. สั่งคอมไพล์ Runtime 14 ไฟล์และ Link เป็น nfsu2.aarch64.v10 บน R36H ทันที
-CROSS_COMPILE="" \
-CC=gcc \
-CXX=g++ \
-STRIP=strip \
-OBJDUMP=objdump \
-GUEST_DIR="$PWD/build/guest-objs/v10" \
-NFS_EXE_VARIANT=1 \
-OUT_NAME="nfsu2.aarch64.v10" \
-bash ports/r36s/build_ci.sh
-
-# 5. คัดลอกไบนารีที่สร้างเสร็จไปทดสอบในโฟลเดอร์เกม
-cp -f ports/r36s/package/nfsu2.aarch64.v10 /roms/ports/nfsu2/nfsu2.aarch64.v10
-cp -f ports/r36s/package/nfsu2.aarch64.v10 /roms/ports/nfsu2/nfsu2.aarch64
-sync
+docker run --rm \
+  -v nfsu2-r36s-work:/work \
+  -v /mnt/d/r36h/nfsu2/source/nfsu2-recompiled-r36s:/src \
+  nfsu2-r36s-build bash -c '
+    rm -rf /work/host-v10 &&
+    GUEST_DIR=/work/guest-v10 \
+    NFS_EXE_VARIANT_H=/work/nfsu2-v10/src/recomp/gen/nfs_exe_variant.h \
+    OUT=/work/host-v10 \
+    bash /src/ports/r36s/build_cross.sh &&
+    cp /work/host-v10/package/nfsu2.aarch64 /src/build/r36s/nfsu2-v10.aarch64 &&
+    cp /work/host-v10/package/nfsu2.aarch64.debug /src/build/r36s/nfsu2-v10.aarch64.debug &&
+    sha1sum /src/build/r36s/nfsu2-v10.aarch64 | cut -d" " -f1 > /src/build/r36s/nfsu2-v10.aarch64.sha1
+  '
 ```
 
----
+### วิธีที่ 2: อัปเดต Guest Objects เมื่อเพิ่มฟังก์ชันใหม่ใน `WRAP_V10`
 
-### วิธีที่ 2: Full Lift & Build จาก `SPEED2.EXE` (เมื่อต้องการสร้าง Guest Objects ใหม่ทั้งหมด)
+หาก `sub_006FFAA7` หรือ `sub_0070CCE8` ยังไม่เคยอยู่ใน `WRAP_V10` ของ `ports/r36s/build_guest_vm.sh`:
+1. เพิ่ม `sub_006FFAA7` และ `sub_0070CCE8` ลงใน `WRAP_V10` (หรือทำ `objcopy --weaken-symbol=sub_006FFAA7 --weaken-symbol=sub_0070CCE8` บน `/work/guest-v10/*.o`) เพื่อเปลี่ยนสัญลักษณ์เดิมให้เป็น `_orig` / weak symbol ก่อน
+2. รัน `build_guest_vm.sh` ภายใน container `nfsu2-r36s-build` (หรือ weaken symbol ใน `/work/guest-v10/*.o`) แล้วจึงรันคำสั่ง Fast Runtime Relink ด้านบน
 
-หากต้องการ Lift โค้ดจาก `SPEED2.EXE` ใหม่ทั้งหมดตั้งแต่ต้น สามารถทำแบบผสม (Lift บน PC Windows ด้วย Python ซึ่งใช้เวลา ~8 นาที แล้วส่งโฟลเดอร์ `src/recomp/gen` ไปคอมไพล์บน R36H) หรือทำบน R36H ทั้งหมดก็ได้:
+### การนำไฟล์ไปทดสอบบนเครื่อง R36H (`ssh r36h`)
 
-#### ขั้นตอน ก: รัน Lift บนเครื่อง PC (Windows) โดยไม่ต้องใช้ Docker
-```powershell
-# บนเครื่อง PC (Windows): ติดตั้ง capstone 5 และ pefile
-pip install "capstone>=5.0,<6" pefile
+หลัง Build เสร็จจะได้ไฟล์ `/mnt/d/r36h/nfsu2/source/nfsu2-recompiled-r36s/build/r36s/nfsu2-v10.aarch64` จากนั้นอัปโหลดไปที่ `/roms/ports/nfsu2/` บนเครื่อง R36H:
 
-# สั่ง Lift SPEED2.EXE ออกมาเป็นไฟล์ C ใน src/recomp/gen/
-cd D:\me\nfsu2-r36s\source\nfsu2-recompiled-r36s
-python build.py "D:\me\nfsu2-r36s\ports\nfsu2\gamedata\speed2_en.exe" --lift-only
-```
-
-#### ขั้นตอน ข: คอมไพล์บนเครื่อง R36H (`--jobs 2` เพื่อไม่ให้เกิน RAM)
 ```bash
-# บนเครื่อง R36H (หลังเปิด Swap 2 GB ที่ /roms/.build_swap แล้ว):
-cd /roms/build/nfsu2-recompiled-r36s
-
-# คอมไพล์ Guest Objects (สามารถรันซ้ำต่อจากจุดเดิมได้หากหยุดกลางคัน)
-GUEST_CC=gcc \
-GUEST_OUT="$PWD/build/guest-objs/v10" \
-BUDGET=999999 \
-JOBS=2 \
-bash ports/r36s/build_guest_vm.sh
-
-# คอมไพล์ Runtime และ Link ไบนารีขั้นสุดท้าย
-CROSS_COMPILE="" CC=gcc CXX=g++ STRIP=strip OBJDUMP=objdump \
-GUEST_DIR="$PWD/build/guest-objs/v10" \
-NFS_EXE_VARIANT=1 \
-OUT_NAME="nfsu2.aarch64.v10" \
-bash ports/r36s/build_ci.sh
-```
-
-#### ขั้นตอน ค: ปิดและลบ Swapfile ชั่วคราวหลัง Build เสร็จ
-```bash
-sudo swapoff /roms/.build_swap
-sudo rm -f /roms/.build_swap
+scp /mnt/d/r36h/nfsu2/source/nfsu2-recompiled-r36s/build/r36s/nfsu2-v10.aarch64 r36h:/roms/ports/nfsu2/nfsu2.aarch64.v10.new
+ssh r36h 'chmod 755 /roms/ports/nfsu2/nfsu2.aarch64.v10.new && mv -f /roms/ports/nfsu2/nfsu2.aarch64.v10.new /roms/ports/nfsu2/nfsu2.aarch64.v10 && cp -f /roms/ports/nfsu2/nfsu2.aarch64.v10 /roms/ports/nfsu2/nfsu2.aarch64 && sync'
 ```

@@ -31,10 +31,10 @@
 
 ### 3.1 ข้อกำหนดของตัวเกม NFSU2 PC
 * ในหน้าจอแผนที่โลก (World Map):
-  * เกมเวอร์ชัน PC กำหนดให้การ **"เปิด/ปิดการนำทาง GPS" (Engage GPS)** ผูกอยู่กับคีย์ **`C`** (**`DIK_C` = `0x2E` หรือ 46**) ซึ่งในโหมดขับรถคือปุ่มเปลี่ยนมุมมองกล้อง (`PCCOCamera`)
-  * ปุ่ม **`Space`** (**`DIK_SPACE` = `0x39` หรือ 57**) ทำหน้าที่ฟิลเตอร์ไอคอนบนแผนที่ (Filter Map Icons) หรือดูชิ้นส่วนในโรงรถ
-  * ปุ่ม **`Enter`** (**`DIK_RETURN` = `0x1C` หรือ 28**) ทำหน้าที่เลือก / ยืนยัน
-  * ปุ่ม **`Escape`** (**`DIK_ESCAPE` = `0x01` หรือ 1**) ทำหน้าที่ย้อนกลับ / ปิดแผนที่
+  * เกมเวอร์ชัน PC กำหนดให้การ **"เปิด/ปิดการนำทาง GPS" (Engage GPS)** ผูกอยู่กับคีย์ **`C`** (**`DIK_C` = `0x2E` หรือ 46**, `Menu Customise`) ซึ่งในโหมดขับรถคือปุ่มเปลี่ยนมุมมองกล้อง (`PCCOCamera`)
+  * ปุ่ม **`Enter`** (**`DIK_RETURN` = `0x1C` หรือ 28**, `Menu Select`) ทำหน้าที่เลือก / ยืนยัน / เปิด-ปิดตัวกรองไอคอนบนแผนที่
+  * ปุ่ม **`Escape`** (**`DIK_ESCAPE` = `0x01` หรือ 1**, `Menu Back`) ทำหน้าที่ย้อนกลับ / ปิดแผนที่
+  * หมายเหตุ: ตาราง DirectInput Action Map ของโหมดเมนู (`DIACTION` 32 รายการที่ `0x7fd7e0` ใน `SPEED2.EXE`) **ไม่มี `DIK_SPACE` (`0x39`)** (`0x39` จะถูกส่งเฉพาะผ่าน `WM_KEYDOWN` `VK_SPACE` จึงไม่สร้าง DirectInput buffered event ใน World Map) ส่วนปุ่มเมนูอื่นๆ ใน `0x7fd7e0` ได้แก่ `H` (`0x23`, Help), `,` (`0x33`, Menu Button 2), `.` (`0x34`, Menu Button 3), `[` / `]` (`0x1a`/`0x1b`, L1/R1) และ `P` (`0x19`, Menu Preset)
 
 ### 3.2 ความผิดพลาดของการแมปปุ่มในพอร์ตเดิม
 * ในโหมดเมนูของพอร์ตเดิม:
@@ -156,3 +156,5 @@ OSError: Failure (ETXTBSY: Text file busy)
 
 > [!IMPORTANT] ข้อควรระวังการสลับคู่ X/Y ระหว่าง Linux Kernel กับ SDL
 > บนเคอร์เนล Linux ค่า `BTN_NORTH` (307) จะได้อินเด็กซ์ `b2` (ปุ่ม X บน) และ `BTN_WEST` (308) จะได้อินเด็กซ์ `b3` (ปุ่ม Y ซ้าย) ดังนั้นเมื่อต้องการให้กด **Y ซ้ายเพื่อเบรก** ต้องผูกเข้ากับ `x:b3` และเมื่อต้องการให้กด **X บนเพื่อเปลี่ยนมุมกล้อง/เปิด GPS** ต้องผูกเข้ากับ `y:b2` ห้ามสลับเป็น `x:b2, y:b3` โดยเด็ดขาด
+>
+> **หมายเหตุด้าน PortMaster บน playOS:** ไฟล์ `/opt/system/Tools/PortMaster/gamecontrollerdb.txt` (บรรทัด 1110) และค่า built-in ใน SDL2 กำหนด `GO-Super Gamepad` เป็น `x:b2,y:b3` (ตามตัวอักษรบนปุ่ม) ซึ่งมี `leftstick:`/`rightstick:` ครบอยู่แล้ว ทำให้ `preparePadMapping()` ใน `ports/r36s/main.cpp` ไม่เขียนทับด้วย `kR36SPadMapping` (`y:b2,x:b3`) ดังนั้นบน playOS หากไม่ได้กำหนด `SDL_GAMECONTROLLERCONFIG` ที่มี `x:b3,y:b2` ใน `nfsu2.cfg` (หรือไม่ได้ตั้ง `NFSU2_FORCE_PAD_MAPPING=1`) ปุ่มเปิด GPS จะไปอยู่ที่ปุ่ม **Y ซ้าย (`b3`)** แทน **X บน (`b2`)**

@@ -2,7 +2,7 @@
 
 **Document ID:** `NFSU2-R36H-PLAN-PR3`  
 **Target Repository:** `source/nfsu2-recompiled-r36s` ([manuelpllull/nfsu2-recompiled-r36s](https://github.com/manuelpllull/nfsu2-recompiled-r36s))  
-**Scope:** การเปิดใช้งานฟังก์ชัน GPS บนหน้าจอแผนที่โลก (World Map) ด้วยปุ่ม Joypad (ปุ่ม X / Triangle) และการคืนค่าฟังก์ชันปุ่ม Space สำหรับการฟิลเตอร์ไอคอนบนแผนที่และเมนูโรงรถ โดยแก้ไขระดับ C++ Source Code ใน `ports/r36s/sdl_gamepad.h` พร้อมขั้นตอนการคอมไพล์บน R36H  
+**Scope:** การเปิดใช้งานฟังก์ชัน GPS บนหน้าจอแผนที่โลก (World Map) ด้วยปุ่ม Joypad (ปุ่ม X / Triangle) และคงการแมปปุ่ม Space (`DIK_SPACE`) ไว้ที่ปุ่ม Y (Square) โดยแก้ไขระดับ C++ Source Code ใน `ports/r36s/sdl_gamepad.h` พร้อมอัปเดต `ports/r36s/package/README.md` และขั้นตอนการคอมไพล์บน R36H  
 
 ---
 
@@ -46,7 +46,7 @@
             want[0x1c] = buttons_[A] || buttons_[Start]; // Cross / Start = Accept (Enter)
             want[0x01] = buttons_[B];                    // Circle = Back / Cancel (Escape)
             want[0x2e] = buttons_[Y];                    // Triangle = Engage GPS on World Map (DIK_C = 46)
-            want[0x39] = buttons_[X];                    // Square = Filter map icons / Garage options (DIK_SPACE = 57)
+            want[0x39] = buttons_[X];                    // Square = Space (DIK_SPACE = 57)
         }
 ```
 
@@ -104,6 +104,7 @@ objdump -d build/nfsu2.aarch64 | grep "sp, #662"
   This commit:
   - Maps buttons_[Y] (Triangle / North, physical X on R36S) to DIK_C (0x2E) in menu mode.
   - Leaves buttons_[B] (Circle, physical A on R36S) as the sole Back/Cancel button (DIK_ESCAPE).
-  - Preserves buttons_[X] (Square, physical Y on R36S) as DIK_SPACE (0x39) for filtering map icons.
+  - Preserves buttons_[X] (Square, physical Y on R36S) as DIK_SPACE (0x39).
+  - Updates the R36S controller layout table in ports/r36s/package/README.md to reflect Engage GPS (World Map) on X (top).
   - Restores authentic PS2 console layout where Triangle engages GPS on the World Map.
   ```

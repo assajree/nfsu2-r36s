@@ -180,7 +180,7 @@ The launcher script inspects `gamedata/SPEED2.EXE` and matches its exact byte si
     4. **`patch_gps.py`** (Targets `nfsu2.aarch64` / `v10` / `v12`):
        * Patches `selectSend(bool)` in Menu Mode (`guestDrivingControls() == false`):
        * Button X (Top / North, `[x2, #42]`): Remapped from `DIK_SPACE` (`sp + 65`) to `DIK_C` (`sp + 54`, `0x2E` = 46). Enables instant Joypad GPS activation on the World Map matching authentic PS2 Triangle behavior without requiring on-screen virtual keyboard.
-       * Button Y (Left / West, `[x2, #43]`): Remapped from redundant `DIK_ESCAPE` (`sp + 9`) to `DIK_SPACE` (`sp + 65`, `0x39` = 57). Restores Space key for World Map icon filtering and garage options.
+       * Button Y (Left / West, `[x2, #43]`): Remapped from redundant `DIK_ESCAPE` (`sp + 9`) to `DIK_SPACE` (`sp + 65`, `0x39` = 57). Note: Menu `DIACTION` (`0x7fd7e0`) does not include `0x39`; World Map item toggling uses `DIK_RETURN` (Button B).
   * Set `NFSU2_LANG=Thai` in `nfsu2/nfsu2.cfg` (or `NFSU2_LANG=English` to switch back to English at any time).
 
 ---
