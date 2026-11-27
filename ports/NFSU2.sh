@@ -67,8 +67,7 @@ export MALLOC_CHECK_=0
 
 # Clocks: CPU, GPU (Mali) and memory controller (DMC) at their top step while the game runs. The RK3326
 # devfreq governors otherwise keep the GPU and DRAM clocks low, and this game is bound by CPU and memory.
-# Also pause non-essential background services (smbd, nmbd, filebrowser; SSH is always kept alive) and
-# lower vm.swappiness to prevent SD card swap stutters. Previous state is restored cleanly on exit.
+# Also lower vm.swappiness to prevent SD card swap stutters. Previous state is restored cleanly on exit.
 SUDO="${ESUDO:-sudo}"
 CLOCK_STATE=""
 for gov in /sys/devices/system/cpu/cpufreq/policy*/scaling_governor /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor \
@@ -84,32 +83,12 @@ if [ -f /proc/sys/vm/swappiness ]; then
   echo 10 | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
 fi
 
-PAUSED_SERVICES=""
-for svc in smbd nmbd; do
-  if systemctl is-active --quiet "$svc" 2>/dev/null; then
-    $SUDO systemctl stop "$svc" > /dev/null 2>&1 && PAUSED_SERVICES="$PAUSED_SERVICES $svc"
-  fi
-done
-
-FILEBROWSER_CMD=""
-FB_PID=$(pgrep -x filebrowser 2>/dev/null | head -n1)
-if [ -n "$FB_PID" ] && [ -r "/proc/$FB_PID/cmdline" ]; then
-  FILEBROWSER_CMD=$(tr '\0' ' ' < "/proc/$FB_PID/cmdline" 2>/dev/null)
-  $SUDO kill "$FB_PID" > /dev/null 2>&1 || true
-fi
-
 restore_system() {
   for entry in $CLOCK_STATE; do
     echo "${entry#*=}" | $SUDO tee "${entry%%=*}" > /dev/null 2>&1 || true
   done
   if [ -n "$OLD_SWAPPINESS" ]; then
     echo "$OLD_SWAPPINESS" | $SUDO tee /proc/sys/vm/swappiness > /dev/null 2>&1 || true
-  fi
-  for svc in $PAUSED_SERVICES; do
-    $SUDO systemctl start "$svc" > /dev/null 2>&1 &
-  done
-  if [ -n "$FILEBROWSER_CMD" ]; then
-    nohup $FILEBROWSER_CMD >/dev/null 2>&1 &
   fi
 }
 trap restore_system EXIT
@@ -307,7 +286,7 @@ CAP_ARG="--cap=${NFSU2_FPS:-30}"
 # Record the clocks actually in effect (launcher.log next to log.txt)
 {
   echo "[launcher] graphics=$NFSU2_GRAPHICS potato=$NFSU2_POTATO draw_dist=$NFSU2_DRAW_DIST draw_budget=$NFSU2_DRAW_BUDGET render_scale=${NFSU2_RENDER_SCALE:-1.0} gpu_extras=$NFSU2_GPU_EXTRAS fps=$NFSU2_FPS probe=$NFSU2_GPU_PROBE slots=$NFSU2_PRESENT_SLOTS"
-  echo "[launcher] paused_services=${PAUSED_SERVICES:-none} paused_filebrowser=${FILEBROWSER_CMD:+yes} swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
+  echo "[launcher] swappiness=$(cat /proc/sys/vm/swappiness 2>/dev/null)"
   # What this kernel offers for GPU load (read by the binary for its [NFSU2 GPU] log line)
   for d in /sys/class/devfreq/*; do [ -d "$d" ] && echo "[launcher] devfreq $d: $(ls "$d" 2>/dev/null | tr '\n' ' ')"; done
   for f in /sys/devices/platform/*gpu*/utilisation /sys/class/misc/mali0/device/utilisation; do
